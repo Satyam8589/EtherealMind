@@ -16,27 +16,12 @@ try {
 const app = express();
 
 // Get CORS settings from environment or use default
-const corsOrigins = (process.env.CORS_ORIGIN || 'http://localhost:3000,http://localhost:5173').split(',');
+const corsOrigins = (process.env.CORS_ORIGIN || 'http://localhost:3000,http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:5176,http://127.0.0.1:3000,http://127.0.0.1:5173').split(',');
 console.log(`Configuring CORS to accept requests from: ${corsOrigins.join(', ')}`);
 
 // Middleware
 app.use(cors({
-  origin: function(origin, callback) {
-    // Allow requests with no origin (like mobile apps, curl requests)
-    if (!origin) return callback(null, true);
-    
-    if (corsOrigins.indexOf(origin) !== -1 || corsOrigins.includes('*')) {
-      callback(null, true);
-    } else {
-      console.warn(`Origin ${origin} not allowed by CORS policy. Allowed origins: ${corsOrigins.join(', ')}`);
-      // In development, allow all origins for easier debugging
-      if (process.env.NODE_ENV !== 'production') {
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
-      }
-    }
-  },
+  origin: '*', // Allow all origins in development
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']

@@ -197,10 +197,26 @@ function App() {
           <SavedPostsProvider>
             <div className="app">
               {apiStatus === 'failed' && (
-                <div style={{ padding: '10px', background: '#ffebee', color: '#c62828', textAlign: 'center' }}>
-                  Warning: Backend connection failed. Some features may not work properly.
-                  <br />
-                  The application is running in offline mode with local data.
+                <div style={{ 
+                  padding: '10px', 
+                  background: '#ffebee', 
+                  color: '#c62828', 
+                  textAlign: 'center',
+                  position: 'relative',
+                  fontSize: '14px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '10px'
+                }}>
+                  <span role="img" aria-label="Warning" style={{ fontSize: '18px' }}>⚠️</span>
+                  <div>
+                    Backend connection unavailable. Running in offline mode with local data.
+                    <br />
+                    <small style={{ color: '#444', fontSize: '12px' }}>
+                      Some features like saving posts may not work. Your data will be stored locally.
+                    </small>
+                  </div>
                 </div>
               )}
               <MainContent />

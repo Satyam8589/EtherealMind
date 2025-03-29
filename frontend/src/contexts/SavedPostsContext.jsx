@@ -201,16 +201,64 @@ export function SavedPostsProvider({ children }) {
     }
   };
 
-  // Refresh saved posts (reload from storage)
-  const refreshSavedPosts = () => {
+  // Refresh saved posts from the backend - now with better error handling
+  const refreshSavedPosts = async () => {
+    if (!currentUser) return;
+    
+    setLoading(true);
+    setError(null);
+    
     try {
-      const savedPostsFromStorage = localStorage.getItem('savedPosts');
-      if (savedPostsFromStorage) {
-        setSavedPosts(JSON.parse(savedPostsFromStorage));
-        console.log('SavedPostsContext: Refreshed saved posts from localStorage');
+      // Try to fetch from backend
+      let apiUrl = process.env.VITE_API_URL || 'http://localhost:3001/api';
+      apiUrl = apiUrl.endsWith('/') ? apiUrl.slice(0, -1) : apiUrl;
+      
+      console.log(`SavedPostsContext: Refreshing saved posts from ${apiUrl}/saved-posts`);
+      
+      // Add timeout to avoid long waits
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      
+      const response = await fetch(`${apiUrl}/saved-posts?userId=${currentUser.uid}`, {
+        signal: controller.signal,
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Authorization': `Bearer ${await currentUser.getIdToken()}`
+        }
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (!response.ok) {
+        throw new Error(`API returned status: ${response.status}`);
       }
-    } catch (err) {
-      console.error('Error parsing saved posts from localStorage:', err);
+      
+      const data = await response.json();
+      setSavedPosts(data.posts || []);
+      console.log('SavedPostsContext: Refreshed saved posts from API', data.posts);
+      
+      // Save to localStorage as backup
+      localStorage.setItem('savedPosts', JSON.stringify(data.posts || []));
+      
+      showToast('Posts refreshed from server', 'success');
+    } catch (error) {
+      console.error('Error refreshing saved posts:', error);
+      setError(error.message);
+      
+      // Fallback to localStorage in case of API failure
+      try {
+        const savedPostsFromStorage = localStorage.getItem('savedPosts');
+        if (savedPostsFromStorage) {
+          const parsedPosts = JSON.parse(savedPostsFromStorage);
+          setSavedPosts(parsedPosts);
+          console.log('SavedPostsContext: Falling back to posts from localStorage');
+          showToast('Using locally saved posts (offline mode)', 'warning');
+        }
+      } catch (storageError) {
+        console.error('Error parsing saved posts from localStorage:', storageError);
+      }
+    } finally {
+      setLoading(false);
     }
   };
 
