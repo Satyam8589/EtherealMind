@@ -164,8 +164,31 @@ function App() {
   useEffect(() => {
     const testBackendConnection = async () => {
       try {
-        console.log('Testing connection to backend...');
-        const response = await fetch('http://localhost:5000/health');
+        // Use 127.0.0.1 explicitly instead of localhost to avoid DNS issues
+        // Get the API base URL (remove /api if it exists)
+        const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8080/api';
+        console.log('Using API URL from environment:', apiUrl);
+        
+        // Try to use 127.0.0.1 explicitly if it's set to localhost
+        const loopbackApiUrl = apiUrl.replace('localhost', '127.0.0.1');
+        console.log('Using loopback IP API URL:', loopbackApiUrl);
+        
+        const baseUrl = loopbackApiUrl.replace(/\/api$/, '');
+        
+        const healthUrl = `${baseUrl}/health`;
+        console.log('Testing connection to backend at:', healthUrl);
+        
+        // Set a longer timeout for the fetch
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+        
+        console.log('Starting fetch request...');
+        const response = await fetch(healthUrl, {
+          signal: controller.signal,
+          headers: { 'Cache-Control': 'no-cache' }
+        });
+        
+        clearTimeout(timeoutId);
         
         if (!response.ok) {
           throw new Error(`Status: ${response.status}`);
@@ -176,6 +199,20 @@ function App() {
         setApiStatus('connected');
       } catch (error) {
         console.error('Backend connection failed:', error);
+        
+        // Try a direct backup connection
+        try {
+          console.log('Trying direct backup connection to 127.0.0.1:8080...');
+          const backupResponse = await fetch('http://127.0.0.1:8080/health');
+          if (backupResponse.ok) {
+            console.log('Backup connection succeeded!');
+            setApiStatus('connected');
+            return;
+          }
+        } catch (backupError) {
+          console.error('Backup connection also failed:', backupError);
+        }
+        
         setApiStatus('failed');
       }
     };

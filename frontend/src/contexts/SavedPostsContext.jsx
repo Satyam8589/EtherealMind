@@ -209,15 +209,14 @@ export function SavedPostsProvider({ children }) {
     setError(null);
     
     try {
-      // Try to fetch from backend
-      let apiUrl = process.env.VITE_API_URL || 'http://localhost:3001/api';
-      apiUrl = apiUrl.endsWith('/') ? apiUrl.slice(0, -1) : apiUrl;
+      // Try to fetch from backend using environment variable (use 127.0.0.1 instead of localhost)
+      const apiUrl = (import.meta.env.VITE_API_URL || 'http://127.0.0.1:8080/api').replace('localhost', '127.0.0.1');
       
       console.log(`SavedPostsContext: Refreshing saved posts from ${apiUrl}/saved-posts`);
       
       // Add timeout to avoid long waits
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
       
       const response = await fetch(`${apiUrl}/saved-posts?userId=${currentUser.uid}`, {
         signal: controller.signal,

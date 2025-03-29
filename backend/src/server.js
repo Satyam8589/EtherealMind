@@ -53,6 +53,8 @@ app.get('/', (req, res) => {
 
 // Health check route
 app.get('/health', (req, res) => {
+  console.log('Health check requested from:', req.ip);
+  
   const firebaseStatus = {
     connected: !!firebaseComponents.db,
     error: firebaseComponents.error || null,
@@ -66,8 +68,10 @@ app.get('/health', (req, res) => {
     savedPosts: inMemoryDB.savedPosts.length
   };
 
-  res.json({ 
+  const healthData = { 
     status: 'healthy',
+    message: 'Backend is running and healthy',
+    timestamp: new Date().toISOString(),
     version: process.env.npm_package_version || '1.0.0',
     firebaseConnected: firebaseStatus.connected,
     usingInMemory: !firebaseStatus.connected,
@@ -76,7 +80,10 @@ app.get('/health', (req, res) => {
     memoryDb: memoryDbStats,
     environment: process.env.NODE_ENV || 'development',
     uptime: process.uptime() + ' seconds'
-  });
+  };
+
+  console.log('Sending health data:', JSON.stringify(healthData, null, 2));
+  res.json(healthData);
 });
 
 // Start server
@@ -90,6 +97,18 @@ const startServer = async () => {
     } else {
       console.log('Running with in-memory database (Firebase not available)');
     }
+    
+    // Log a startup message that's easy to spot
+    console.log('\n');
+    console.log('=============================================================');
+    console.log('              ETHEREALMIND BACKEND STARTED                   ');
+    console.log('=============================================================');
+    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`Health check available at http://localhost:${PORT}/health`);
+    console.log(`API available at http://localhost:${PORT}/api`);
+    console.log('Press Ctrl+C to stop the server');
+    console.log('=============================================================');
+    console.log('\n');
     
     app.listen(PORT, () => {
       console.log(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
