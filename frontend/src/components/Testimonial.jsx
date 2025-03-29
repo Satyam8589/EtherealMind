@@ -5,9 +5,9 @@ const Testimonial = () => {
     <section className="testimonial">
       <div className="container">
         <div className="testimonial-content animate-fadeIn">
-          <p>Share your ideas with a community that values creativity and innovation.</p>
+          <p>A higher plane for thoughts and ideas.</p>
           <div className="testimonial-author">
-            <span>Alexa Johnson, ThoughtShare User</span>
+            <span>Etherealmind</span>
           </div>
         </div>
       </div>

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>EtherealMind Minimal Test</title>
+  <link rel="stylesheet" href="./dist/assets/index-B42A9o9T.css">
+  <style>
+    .fallback-container {
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 40px 20px;
+      font-family: Arial, sans-serif;
+      text-align: center;
+    }
+    h1 {
+      color: #333;
+    }
+    p {
+      margin-bottom: 20px;
+    }
+    button {
+      background: #4361ee;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      font-size: 16px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    button:hover {
+      background: #3b55d9;
+    }
+    .error-message {
+      margin-top: 20px;
+      padding: 15px;
+      background: #ffebee;
+      border: 1px solid #ffcdd2;
+      border-radius: 4px;
+      color: #c62828;
+      text-align: left;
+    }
+  </style>
+</head>
+<body>
+  <div id="root">
+    <div class="fallback-container">
+      <h1>EtherealMind</h1>
+      <p>This is a fallback page while the application is loading or if there's an error.</p>
+      <div class="actions">
+        <button id="checkApp">Check Application Status</button>
+      </div>
+      <div id="errorInfo" class="error-message" style="display: none;"></div>
+    </div>
+  </div>
+
+  <script>
+    document.getElementById('checkApp').addEventListener('click', function() {
+      const errorInfo = document.getElementById('errorInfo');
+      
+      try {
+        // Attempt to load the app
+        errorInfo.style.display = 'block';
+        errorInfo.textContent = 'Attempting to load application...';
+        
+        // Try to fetch the index.html to see if it loads
+        fetch('./dist/index.html')
+          .then(response => {
+            if (!response.ok) {
+              throw new Error(`HTTP error! Status: ${response.status}`);
+            }
+            errorInfo.textContent = 'Application resources loaded successfully. Redirecting...';
+            errorInfo.style.backgroundColor = '#e8f5e9';
+            errorInfo.style.borderColor = '#c8e6c9';
+            errorInfo.style.color = '#2e7d32';
+            
+            // Redirect after a short delay
+            setTimeout(() => {
+              window.location.href = './dist/index.html';
+            }, 1500);
+          })
+          .catch(error => {
+            errorInfo.textContent = `Error loading application: ${error.message}\n\nPlease check your browser console for more details.`;
+          });
+      } catch (e) {
+        errorInfo.textContent = `Fatal error: ${e.message}`;
+      }
+    });
+  </script>
+</body>
+</html> 

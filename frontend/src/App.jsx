@@ -1,22 +1,214 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import './App.css';
 import Header from './components/Header';
 import Hero from './components/Hero';
 import Testimonial from './components/Testimonial';
 import Footer from './components/Footer';
+import SignupForm from './components/SignupForm';
+import LoginForm from './components/LoginForm';
+import ProfilePage from './components/ProfilePage';
+import ExplorePage from './components/ExplorePage';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { SavedPostsProvider } from './contexts/SavedPostsContext';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 
-function App() {
+// Simple loading component
+const LoadingIndicator = () => (
+  <div style={{ 
+    display: 'flex', 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    height: '100vh', 
+    flexDirection: 'column',
+    background: '#f9f9f9'
+  }}>
+    <h2>Loading EtherealMind...</h2>
+    <p>Please wait while we set things up.</p>
+  </div>
+);
+
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null };
+  }
+
+  static getDerivedStateFromError(error) {
+    console.error("Error caught by ErrorBoundary:", error);
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error, errorInfo) {
+    console.error("App crashed:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: '20px', textAlign: 'center' }}>
+          <h2>Something went wrong.</h2>
+          <p>Please try refreshing the page or check the console for more details.</p>
+          <details style={{ marginTop: '20px', textAlign: 'left' }}>
+            <summary>Error details</summary>
+            <pre>{this.state.error && this.state.error.toString()}</pre>
+          </details>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+// Protected route component
+function ProtectedRoute({ children }) {
+  const { currentUser, loading } = useAuth();
+  console.log('ProtectedRoute check - Current user:', currentUser ? 'authenticated' : 'not authenticated', 'Loading:', loading);
+  
+  if (loading) {
+    return <LoadingIndicator />;
+  }
+  
+  return currentUser ? children : <Navigate to="/" />;
+}
+
+// Main content wrapper to handle authenticated vs unauthenticated states
+function MainContent() {
+  console.log('MainContent rendering');
+  const { currentUser, loading } = useAuth();
+  const [isSignupOpen, setIsSignupOpen] = useState(false);
+  const [isLoginOpen, setIsLoginOpen] = useState(false);
+
+  console.log('MainContent - Current user:', currentUser ? 'authenticated' : 'not authenticated', 'Loading:', loading);
+
+  const openSignup = () => {
+    setIsSignupOpen(true);
+    setIsLoginOpen(false);
+  };
+
+  const openLogin = () => {
+    setIsLoginOpen(true);
+    setIsSignupOpen(false);
+  };
+
+  const closeModals = () => {
+    setIsSignupOpen(false);
+    setIsLoginOpen(false);
+  };
+
+  const switchToSignup = () => {
+    setIsLoginOpen(false);
+    setIsSignupOpen(true);
+  };
+
+  const switchToLogin = () => {
+    setIsSignupOpen(false);
+    setIsLoginOpen(true);
+  };
+
+  if (loading) {
+    return <LoadingIndicator />;
+  }
+
+  if (currentUser) {
+    console.log('Rendering authenticated routes');
+    return (
+      <Routes>
+        <Route path="/" element={<ProfilePage />} />
+        <Route 
+          path="/explore" 
+          element={
+            <ProtectedRoute>
+              <ExplorePage isStandalone={true} />
+            </ProtectedRoute>
+          } 
+        />
+        <Route path="*" element={<Navigate to="/" />} />
+      </Routes>
+    );
+  }
+
+  // Return landing page if not logged in
+  console.log('Rendering landing page for unauthenticated user');
   return (
-    <div className="app">
+    <>
       <div className="container">
-        <Header />
-        <Hero />
+        <Header onJoinClick={openSignup} onLoginClick={openLogin} />
+        <Hero onJoinClick={openSignup} />
       </div>
       <Testimonial />
       <div className="container">
         <Footer />
       </div>
-    </div>
+      <SignupForm isOpen={isSignupOpen} onClose={closeModals} onSwitchToLogin={switchToLogin} />
+      <LoginForm isOpen={isLoginOpen} onClose={closeModals} onSwitchToSignup={switchToSignup} />
+    </>
+  );
+}
+
+function App() {
+  console.log('App component rendering');
+  const [appLoaded, setAppLoaded] = useState(false);
+  const [apiStatus, setApiStatus] = useState('unknown');
+
+  // Mark app as loaded
+  useEffect(() => {
+    // Short delay to ensure all components have initialized
+    setTimeout(() => {
+      setAppLoaded(true);
+      console.log('App marked as loaded');
+    }, 1000);
+  }, []);
+
+  // Test backend connection
+  useEffect(() => {
+    const testBackendConnection = async () => {
+      try {
+        console.log('Testing connection to backend...');
+        const response = await fetch('http://localhost:5000/health');
+        
+        if (!response.ok) {
+          throw new Error(`Status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        console.log('Backend connection successful:', data);
+        setApiStatus('connected');
+      } catch (error) {
+        console.error('Backend connection failed:', error);
+        setApiStatus('failed');
+      }
+    };
+    
+    testBackendConnection();
+  }, []);
+
+  if (!appLoaded) {
+    console.log('Showing loading state');
+    return <LoadingIndicator />;
+  }
+
+  console.log('Debug - Rendering App with providers');
+  
+  return (
+    <ErrorBoundary>
+      <Router>
+        <AuthProvider>
+          <SavedPostsProvider>
+            <div className="app">
+              {apiStatus === 'failed' && (
+                <div style={{ padding: '10px', background: '#ffebee', color: '#c62828', textAlign: 'center' }}>
+                  Warning: Backend connection failed. Some features may not work properly.
+                  <br />
+                  The application is running in offline mode with local data.
+                </div>
+              )}
+              <MainContent />
+            </div>
+          </SavedPostsProvider>
+        </AuthProvider>
+      </Router>
+    </ErrorBoundary>
   );
 }
 
