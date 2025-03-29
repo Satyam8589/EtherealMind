@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EtherealMind Backend</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background-color: #f0f7ff;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .links {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .links a {
+            padding: 10px 15px;
+            background-color: #4a90e2;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+        }
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f8f8;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>EtherealMind Backend Server</h1>
+        <p>This is the API server for EtherealMind application.</p>
+    </div>
+
+    <div class="content">
+        <h2>Available Endpoints</h2>
+        <ul>
+            <li><a href="./health" target="_blank">/health</a> - Health check endpoint</li>
+            <li><a href="./api/health" target="_blank">/api/health</a> - API Health check endpoint</li>
+            <li><a href="./api/standalone-health" target="_blank">/api/standalone-health</a> - Standalone Health check endpoint</li>
+            <li><a href="./api/saved-posts" target="_blank">/api/saved-posts</a> - Saved posts API</li>
+        </ul>
+    </div>
+    
+    <div class="links">
+        <a href="./health" target="_blank">Check Health</a>
+        <a href="./api/standalone-health" target="_blank">Check Standalone Health</a>
+    </div>
+    
+    <div id="status" class="status">
+        Server status: Checking...
+    </div>
+
+    <script>
+        // Check server health
+        async function checkHealth() {
+            const statusEl = document.getElementById('status');
+            
+            try {
+                // Try multiple health endpoints
+                const endpoints = [
+                    './health',
+                    './api/health',
+                    './api/standalone-health'
+                ];
+                
+                for (const endpoint of endpoints) {
+                    try {
+                        const response = await fetch(endpoint);
+                        if (response.ok) {
+                            const data = await response.json();
+                            statusEl.innerHTML = `<h3>Server is healthy!</h3>
+                                <pre>${JSON.stringify(data, null, 2)}</pre>`;
+                            return;
+                        }
+                    } catch (err) {
+                        console.warn(`Endpoint ${endpoint} failed:`, err);
+                    }
+                }
+                
+                statusEl.innerHTML = `<h3 style="color: red;">Unable to connect to any health endpoint</h3>`;
+            } catch (err) {
+                statusEl.innerHTML = `<h3 style="color: red;">Error checking server health: ${err.message}</h3>`;
+            }
+        }
+        
+        // Run health check when page loads
+        window.onload = checkHealth;
+    </script>
+</body>
+</html> 

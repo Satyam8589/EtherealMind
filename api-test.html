@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>API Connection Test</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    button {
+      padding: 10px 15px;
+      background: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      margin: 10px 0;
+    }
+    #results {
+      background: #f5f5f5;
+      padding: 15px;
+      border-radius: 4px;
+      margin-top: 20px;
+      white-space: pre-wrap;
+      overflow-x: auto;
+    }
+    .error {
+      color: red;
+    }
+  </style>
+</head>
+<body>
+  <h1>API Connection Test</h1>
+  
+  <p>This page tests the connection to your backend API.</p>
+  
+  <div>
+    <label for="apiUrl">Backend URL:</label>
+    <input type="text" id="apiUrl" style="width: 400px" value="https://ethereal-mind-mvqz-ght2e64uv.vercel.app">
+  </div>
+  
+  <button onclick="testHealthEndpoint()">Test Health Endpoint</button>
+  
+  <div id="results">Results will appear here...</div>
+  
+  <script>
+    async function testHealthEndpoint() {
+      const resultsDiv = document.getElementById('results');
+      const apiUrl = document.getElementById('apiUrl').value;
+      
+      resultsDiv.innerHTML = 'Testing connection to ' + apiUrl + '/health ...';
+      
+      try {
+        const response = await fetch(`${apiUrl}/health`, {
+          headers: {
+            'Cache-Control': 'no-cache'
+          }
+        });
+        
+        if (!response.ok) {
+          throw new Error(`HTTP error! Status: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        resultsDiv.innerHTML = 'Connection successful! Response:\n\n' + 
+                             JSON.stringify(data, null, 2);
+                             
+        // Try to check response headers
+        resultsDiv.innerHTML += '\n\nResponse Headers:\n';
+        for (const [key, value] of response.headers.entries()) {
+          resultsDiv.innerHTML += `${key}: ${value}\n`;
+        }
+      } catch (error) {
+        resultsDiv.innerHTML = `<span class="error">Error connecting to API: ${error.message}</span>`;
+        
+        // Try a CORS workaround and see if it works
+        resultsDiv.innerHTML += '\n\nTrying alternate connection method...\n';
+        
+        try {
+          const img = new Image();
+          const startTime = new Date().getTime();
+          img.onload = function() {
+            const endTime = new Date().getTime();
+            resultsDiv.innerHTML += `Server is reachable (responded in ${endTime - startTime}ms) but CORS is blocking the response.`;
+          };
+          img.onerror = function() {
+            resultsDiv.innerHTML += 'Server is not reachable at all - possible networking/firewall issue.';
+          };
+          img.src = `${apiUrl}/health?cachebust=${new Date().getTime()}`;
+        } catch (e) {
+          resultsDiv.innerHTML += 'Failed to test alternate connection method.';
+        }
+      }
+    }
+  </script>
+</body>
+</html> 

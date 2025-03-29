@@ -1,0 +1,119 @@
+// Serverless function to handle saved posts
+const mockPosts = [
+  {
+    id: "1",
+    title: "The Art of Mindfulness",
+    description: "Exploring how mindfulness can transform your daily life and boost mental wellbeing.",
+    content: "Mindfulness is the practice of purposely bringing one's attention to the present moment without judgment. Research has shown that mindfulness practices can reduce stress, anxiety, and depression while improving focus and emotional regulation. Regular practice of mindfulness meditation can physically change the brain, strengthening areas associated with attention and sensory processing. Start with just 5 minutes a day of mindful breathing, gradually increasing the duration as you become more comfortable with the practice. Remember, mindfulness is not about clearing your mind but rather observing your thoughts without getting caught up in them.",
+    category: "Meditation",
+    author: "Jane Doe",
+    date: "2023-10-15",
+    isAnonymous: false,
+    isSaved: false,
+    image: "https://images.unsplash.com/photo-1506126613408-eca07ce68773"
+  },
+  {
+    id: "2",
+    title: "Journey Through Dreams",
+    description: "Understanding the significance of dreams and their impact on our subconscious mind.",
+    content: "Dreams have fascinated humans throughout history, with ancient civilizations believing they were messages from the gods or glimpses into other realms. Modern psychology views dreams as reflections of our unconscious mind, processing emotions and experiences from our waking life. Lucid dreaming—the awareness that you're dreaming while in the dream state—offers unique opportunities for self-exploration and creative problem-solving. Research suggests that REM sleep, when most dreaming occurs, plays a crucial role in emotional regulation and memory consolidation. Keeping a dream journal can help you identify patterns and themes that might provide insights into your waking life concerns and aspirations.",
+    category: "Dreams",
+    author: "Alex Smith",
+    date: "2023-10-20",
+    isAnonymous: true,
+    isSaved: false,
+    image: "https://images.unsplash.com/photo-1502139214982-d0ad755818d8"
+  },
+  {
+    id: "3",
+    title: "The Power of Visualization",
+    description: "Harnessing visualization techniques to achieve goals and improve performance.",
+    content: "Visualization is a powerful mental technique that involves creating vivid mental images of desired outcomes. Athletes, musicians, and business leaders often use visualization to enhance performance and achieve goals. When you visualize, your brain generates the same neural patterns as when you're actually performing the activity, strengthening neural pathways and preparing you for success. Studies show that combining physical practice with visualization leads to better results than physical practice alone. Effective visualization engages all senses, creating a fully immersive mental experience. Regular practice of visualization techniques can reduce anxiety, increase confidence, and improve motivation by making your goals seem more attainable.",
+    category: "Meditation",
+    author: "Michael Johnson",
+    date: "2023-11-05",
+    isAnonymous: false,
+    isSaved: false,
+    image: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe"
+  },
+  {
+    id: "4",
+    title: "Exploring Lucid Dreaming",
+    description: "Techniques and benefits of becoming conscious within your dreams.",
+    content: "Lucid dreaming occurs when you become aware that you're dreaming while still in the dream state. This awareness allows you to control and direct your dreams, opening up possibilities for creativity, problem-solving, and personal growth. Common techniques to induce lucid dreams include reality testing (regularly questioning if you're dreaming), keeping a dream journal, and the Wake Back to Bed method. Research indicates that lucid dreaming can be therapeutic for nightmare sufferers and may help with skill acquisition when practicing activities within dreams. The prefrontal cortex, responsible for self-awareness and decision-making in waking life, becomes more active during lucid dreams compared to normal dreams, creating a unique state of consciousness that bridges waking and dreaming.",
+    category: "Dreams",
+    author: "Samantha Wilson",
+    date: "2023-11-15",
+    isAnonymous: false,
+    isSaved: false,
+    image: "https://images.unsplash.com/photo-1519681393784-d120267933ba"
+  },
+  {
+    id: "5",
+    title: "The Healing Power of Nature",
+    description: "How connecting with nature can restore mental clarity and emotional balance.",
+    content: "Nature has profound effects on our psychological and physiological wellbeing. Studies show that even brief exposure to natural environments can reduce stress hormones, lower blood pressure, and improve mood. The Japanese practice of 'forest bathing' (shinrin-yoku) involves immersing oneself in nature using all five senses, and has been shown to boost immune function and increase feelings of vitality. Natural settings activate our parasympathetic nervous system, promoting relaxation and recovery from mental fatigue. The 'biophilia hypothesis' suggests humans have an innate bond with nature and other living systems, explaining why we feel drawn to natural environments. Incorporating nature into daily life through houseplants, nature walks, or simply gazing at natural scenes can significantly improve wellbeing and cognitive function.",
+    category: "Healing",
+    author: "David Brown",
+    date: "2023-12-01",
+    isAnonymous: true,
+    isSaved: false,
+    image: "https://images.unsplash.com/photo-1441974231531-c6227db76b6e"
+  }
+];
+
+// Set CORS headers
+module.exports = (req, res) => {
+  // Set CORS headers
+  res.setHeader('Access-Control-Allow-Credentials', true);
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET,OPTIONS,PATCH,DELETE,POST,PUT');
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'X-CSRF-Token, X-Requested-With, Accept, Accept-Version, Content-Length, Content-MD5, Content-Type, Date, X-Api-Version'
+  );
+
+  // Handle preflight request
+  if (req.method === 'OPTIONS') {
+    res.status(200).end();
+    return;
+  }
+
+  if (req.method === 'GET') {
+    // Return mock posts data
+    res.status(200).json({
+      status: 'success',
+      message: 'Posts retrieved successfully',
+      data: mockPosts,
+      timestamp: new Date().toISOString(),
+      origin: req.headers['host'] || 'unknown'
+    });
+  } else {
+    // Handle POST request to save new posts
+    if (req.method === 'POST') {
+      try {
+        // In a real implementation, we would save the post to a database
+        // For now, we'll just acknowledge receipt
+        res.status(201).json({
+          status: 'success',
+          message: 'Post saved successfully',
+          timestamp: new Date().toISOString(),
+          origin: req.headers['host'] || 'unknown'
+        });
+      } catch (error) {
+        res.status(400).json({
+          status: 'error',
+          message: 'Failed to save post',
+          error: error.message,
+          timestamp: new Date().toISOString()
+        });
+      }
+    } else {
+      res.status(405).json({
+        status: 'error',
+        message: 'Method not allowed',
+        timestamp: new Date().toISOString()
+      });
+    }
+  }
+}; 

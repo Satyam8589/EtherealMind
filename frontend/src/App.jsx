@@ -163,58 +163,53 @@ function App() {
   // Test backend connection
   useEffect(() => {
     const testBackendConnection = async () => {
-      try {
-        // Use 127.0.0.1 explicitly instead of localhost to avoid DNS issues
-        // Get the API base URL (remove /api if it exists)
-        const apiUrl = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8080/api';
-        console.log('Using API URL from environment:', apiUrl);
-        
-        // Try to use 127.0.0.1 explicitly if it's set to localhost
-        const loopbackApiUrl = apiUrl.replace('localhost', '127.0.0.1');
-        console.log('Using loopback IP API URL:', loopbackApiUrl);
-        
-        const baseUrl = loopbackApiUrl.replace(/\/api$/, '');
-        
-        const healthUrl = `${baseUrl}/health`;
-        console.log('Testing connection to backend at:', healthUrl);
-        
-        // Set a longer timeout for the fetch
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
-        
-        console.log('Starting fetch request...');
-        const response = await fetch(healthUrl, {
-          signal: controller.signal,
-          headers: { 'Cache-Control': 'no-cache' }
-        });
-        
-        clearTimeout(timeoutId);
-        
-        if (!response.ok) {
-          throw new Error(`Status: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        console.log('Backend connection successful:', data);
-        setApiStatus('connected');
-      } catch (error) {
-        console.error('Backend connection failed:', error);
-        
-        // Try a direct backup connection
+      setApiStatus('checking');
+      // List of health endpoints to try
+      const healthEndpoints = [
+        `${baseUrl}/api/standalone-health`,
+        `${baseUrl}/api/saved-posts`,
+        `https://ethereal-mind-mvqz-ght2e64uv.vercel.app/api/standalone-health`,
+        `https://ethereal-mind-mvqz-ght2e64uv.vercel.app/api/saved-posts`,
+        `${baseUrl}/api/health`,
+        `${baseUrl}/health`,
+        `https://ethereal-mind-mvqz-ght2e64uv.vercel.app/health`,
+        `https://ethereal-mind-mvqz-ght2e64uv.vercel.app/api/health`
+      ];
+
+      for (const endpoint of healthEndpoints) {
         try {
-          console.log('Trying direct backup connection to 127.0.0.1:8080...');
-          const backupResponse = await fetch('http://127.0.0.1:8080/health');
-          if (backupResponse.ok) {
-            console.log('Backup connection succeeded!');
+          console.log(`Attempting to connect to: ${endpoint}`);
+          const response = await fetch(endpoint, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+          });
+          
+          console.log(`Response status for ${endpoint}: ${response.status}`);
+          
+          // Log headers for debugging
+          const headers = {};
+          response.headers.forEach((value, key) => {
+              headers[key] = value;
+          });
+          console.log('Response headers:', headers);
+          
+          if (response.ok) {
+            const data = await response.json();
+            console.log('Backend connection successful:', data);
             setApiStatus('connected');
             return;
+          } else {
+            console.warn(`Endpoint ${endpoint} returned status ${response.status}`);
           }
-        } catch (backupError) {
-          console.error('Backup connection also failed:', backupError);
+        } catch (error) {
+          console.warn(`Failed to connect to ${endpoint}:`, error);
         }
-        
-        setApiStatus('failed');
       }
+
+      console.error('All backend connection attempts failed');
+      setApiStatus('failed');
     };
     
     testBackendConnection();

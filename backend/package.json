@@ -1,28 +1,24 @@
 {
   "name": "etherealmind-backend",
   "version": "1.0.0",
-  "description": "Backend API for EtherealMind application",
+  "description": "Backend server for EtherealMind application",
   "main": "src/server.js",
   "scripts": {
     "start": "node src/server.js",
-    "dev": "nodemon --config nodemon.json src/server.js",
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "lint": "eslint .",
-    "emulator": "firebase emulators:start"
+    "dev": "nodemon src/server.js",
+    "build": "mkdir -p public && cp -r api public/ && echo 'Build completed'",
+    "vercel-build": "npm run build"
+  },
+  "engines": {
+    "node": "18.x"
   },
   "dependencies": {
     "cors": "^2.8.5",
-    "dotenv": "^16.0.3",
-    "express": "^4.18.2",
-    "firebase-admin": "^11.9.0",
-    "morgan": "^1.10.0"
+    "dotenv": "^16.3.1",
+    "express": "^4.21.2",
+    "helmet": "^7.0.0"
   },
   "devDependencies": {
-    "eslint": "^8.42.0",
-    "firebase-tools": "^12.4.0",
-    "nodemon": "^2.0.22"
-  },
-  "engines": {
-    "node": ">=14.0.0"
+    "nodemon": "^3.0.1"
   }
 }

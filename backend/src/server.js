@@ -1,123 +1,162 @@
+/**
+ * EtherealMind Backend Server
+ * Simple Express server that serves static files and API endpoints
+ */
+
 const express = require('express');
 const cors = require('cors');
-const morgan = require('morgan');
-require('dotenv').config();
+const path = require('path');
+const fs = require('fs');
 
-// Import Firebase configuration
-let firebaseComponents = {};
-try {
-  firebaseComponents = require('./firebase-config');
-  console.log('Firebase components loaded');
-} catch (error) {
-  console.error('Failed to load Firebase components:', error.message);
-}
-
-// Create Express app
+// Initialize express app
 const app = express();
-
-// Get CORS settings from environment or use default
-const corsOrigins = (process.env.CORS_ORIGIN || 'http://localhost:3000,http://localhost:5173,http://localhost:5174,http://localhost:5175,http://localhost:5176,http://127.0.0.1:3000,http://127.0.0.1:5173').split(',');
-console.log(`Configuring CORS to accept requests from: ${corsOrigins.join(', ')}`);
+const PORT = process.env.PORT || 8080;
 
 // Middleware
 app.use(cors({
-  origin: '*', // Allow all origins in development
-  credentials: true,
+  origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+  allowedHeaders: ['Content-Type', 'Authorization']
 }));
 app.use(express.json());
-app.use(morgan('dev'));
+app.use(express.urlencoded({ extended: true }));
 
-// In-memory fallback for when Firebase is not available
-const inMemoryDB = {
-  users: [],
-  savedPosts: []
-};
+// Serve static files from the public directory
+app.use(express.static(path.join(__dirname, '../public')));
 
-// Make Firebase and fallback DB available for routes
-app.locals.firebase = firebaseComponents;
-app.locals.inMemoryDB = inMemoryDB;
-app.locals.useFirebase = !!firebaseComponents.db;
-
-// Import routes
-const savedPostsRoutes = require('./routes/savedPosts');
-
-// Routes
-app.use('/api/saved-posts', savedPostsRoutes);
-
-// Root route
-app.get('/', (req, res) => {
-  res.json({ message: 'Welcome to EtherealMind API' });
-});
-
-// Health check route
+// Health check endpoint
 app.get('/health', (req, res) => {
-  console.log('Health check requested from:', req.ip);
-  
-  const firebaseStatus = {
-    connected: !!firebaseComponents.db,
-    error: firebaseComponents.error || null,
-    emulator: process.env.USE_FIREBASE_EMULATOR === 'true' 
-      ? { enabled: true, host: process.env.FIRESTORE_EMULATOR_HOST || 'localhost:8080' } 
-      : { enabled: false }
-  };
-
-  const memoryDbStats = {
-    users: inMemoryDB.users.length,
-    savedPosts: inMemoryDB.savedPosts.length
-  };
-
-  const healthData = { 
-    status: 'healthy',
-    message: 'Backend is running and healthy',
+  res.status(200).json({
+    status: 'success',
+    message: 'Server is healthy',
     timestamp: new Date().toISOString(),
-    version: process.env.npm_package_version || '1.0.0',
-    firebaseConnected: firebaseStatus.connected,
-    usingInMemory: !firebaseStatus.connected,
-    storageMode: firebaseStatus.connected ? 'firebase' : 'in-memory',
-    firebase: firebaseStatus,
-    memoryDb: memoryDbStats,
     environment: process.env.NODE_ENV || 'development',
-    uptime: process.uptime() + ' seconds'
-  };
-
-  console.log('Sending health data:', JSON.stringify(healthData, null, 2));
-  res.json(healthData);
+    origin: req.headers['host'] || 'unknown'
+  });
 });
 
-// Start server
-const PORT = process.env.PORT || 5000;
+// API health check
+app.get('/api/health', (req, res) => {
+  res.status(200).json({
+    status: 'success',
+    message: 'API is healthy',
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development',
+    origin: req.headers['host'] || 'unknown'
+  });
+});
 
-// Initialize server
-const startServer = async () => {
+// Posts endpoint
+app.get('/api/saved-posts', (req, res) => {
   try {
-    if (firebaseComponents.db) {
-      console.log('Firebase initialized successfully, using Firestore database');
-    } else {
-      console.log('Running with in-memory database (Firebase not available)');
+    // Try to load mock data from file if available
+    const mockDataPath = path.join(__dirname, '../api/saved-posts.js');
+    
+    if (fs.existsSync(mockDataPath)) {
+      // If file exists, extract the mockPosts data
+      const content = fs.readFileSync(mockDataPath, 'utf8');
+      const mockPostsMatch = content.match(/const\s+mockPosts\s*=\s*(\[[\s\S]*?\]);/);
+      
+      if (mockPostsMatch && mockPostsMatch[1]) {
+        try {
+          // Use eval for simplicity (in production, a JSON file would be better)
+          // eslint-disable-next-line no-eval
+          const mockPosts = eval(mockPostsMatch[1]);
+          
+          return res.status(200).json({
+            status: 'success',
+            message: 'Posts retrieved successfully',
+            data: mockPosts,
+            timestamp: new Date().toISOString(),
+            origin: req.headers['host'] || 'unknown'
+          });
+        } catch (evalError) {
+          console.error('Error evaluating mock posts:', evalError);
+        }
+      }
     }
     
-    // Log a startup message that's easy to spot
-    console.log('\n');
-    console.log('=============================================================');
-    console.log('              ETHEREALMIND BACKEND STARTED                   ');
-    console.log('=============================================================');
-    console.log(`Server running on http://localhost:${PORT}`);
-    console.log(`Health check available at http://localhost:${PORT}/health`);
-    console.log(`API available at http://localhost:${PORT}/api`);
-    console.log('Press Ctrl+C to stop the server');
-    console.log('=============================================================');
-    console.log('\n');
-    
-    app.listen(PORT, () => {
-      console.log(`Server running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
-      console.log(`API available at http://localhost:${PORT}`);
-      console.log(`Health check at http://localhost:${PORT}/health`);
+    // Fallback to empty array if file doesn't exist or can't be parsed
+    res.status(200).json({
+      status: 'success',
+      message: 'No posts found',
+      data: [],
+      timestamp: new Date().toISOString(),
+      origin: req.headers['host'] || 'unknown'
     });
   } catch (error) {
-    console.error('Error starting server:', error);
+    console.error('Error retrieving posts:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to retrieve posts',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
   }
-};
+});
 
-startServer(); 
+// Categories endpoint
+app.get('/api/categories', (req, res) => {
+  try {
+    // Try to load categories from file if available
+    const categoriesPath = path.join(__dirname, '../api/categories.js');
+    
+    if (fs.existsSync(categoriesPath)) {
+      // If file exists, extract the categories data
+      const content = fs.readFileSync(categoriesPath, 'utf8');
+      const categoriesMatch = content.match(/const\s+categories\s*=\s*(\[[\s\S]*?\]);/);
+      
+      if (categoriesMatch && categoriesMatch[1]) {
+        try {
+          // Use eval for simplicity (in production, a JSON file would be better)
+          // eslint-disable-next-line no-eval
+          const categories = eval(categoriesMatch[1]);
+          
+          return res.status(200).json({
+            status: 'success',
+            message: 'Categories retrieved successfully',
+            data: categories,
+            timestamp: new Date().toISOString(),
+            origin: req.headers['host'] || 'unknown'
+          });
+        } catch (evalError) {
+          console.error('Error evaluating categories:', evalError);
+        }
+      }
+    }
+    
+    // Fallback to empty array if file doesn't exist or can't be parsed
+    res.status(200).json({
+      status: 'success',
+      message: 'No categories found',
+      data: [],
+      timestamp: new Date().toISOString(),
+      origin: req.headers['host'] || 'unknown'
+    });
+  } catch (error) {
+    console.error('Error retrieving categories:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to retrieve categories',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// Catch all route - serve index.html
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../public/index.html'));
+});
+
+// Only start the server if directly run (not imported)
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`Server running on http://localhost:${PORT}`);
+    console.log(`Health check: http://localhost:${PORT}/health`);
+    console.log(`API health check: http://localhost:${PORT}/api/health`);
+  });
+}
+
+// Export for serverless use
+module.exports = app; 

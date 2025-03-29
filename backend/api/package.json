@@ -1,0 +1,12 @@
+{
+  "name": "etherealmind-api",
+  "version": "1.0.0",
+  "description": "API functions for EtherealMind",
+  "main": "health.js",
+  "dependencies": {
+    "cors": "^2.8.5"
+  },
+  "engines": {
+    "node": ">=14"
+  }
+} 
