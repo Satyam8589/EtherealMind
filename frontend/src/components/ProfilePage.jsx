@@ -31,6 +31,13 @@ const ProfilePage = () => {
     }
   }, [allPosts]);
   
+  // Calculate user's post count - only count posts authored by current user
+  const userPostCount = localPosts.filter(post => 
+    post.authorId === currentUser?.uid || 
+    post.author === currentUser?.displayName || 
+    post.author === currentUser?.email
+  ).length;
+
   // Demo posts - kept separate from user posts
   const demoPosts = [
     {
@@ -100,13 +107,8 @@ const ProfilePage = () => {
   const handlePostCreated = (newPost) => {
     console.log("New post created:", newPost);
     
-    // Add the new post to the context
-    if (!newPost.id) {
-      newPost.id = Date.now().toString();
-    }
-    
-    // Update local posts state to show the new post
-    setLocalPosts(prevPosts => [newPost, ...prevPosts]);
+    // No need to manually add to localPosts, as the addNewPost function in SavedPostsContext
+    // already adds it to allPosts which is used to populate localPosts via useEffect
     
     // Close the post creation modal
     setShowPostCreation(false);
@@ -131,7 +133,6 @@ const ProfilePage = () => {
     );
   };
 
-  // Navigate to explore page with saved filter
   const handleViewSavedPosts = () => {
     navigate('/explore?view=saved');
   };
@@ -177,9 +178,8 @@ const ProfilePage = () => {
       // Show only demo posts
       return demoPosts;
     } else {
-      // For recommended, show real posts with a mix of demo if needed
-      const userPosts = localPosts.filter(post => !post.isDemo);
-      return userPosts.length > 0 ? userPosts : demoPosts;
+      // For recommended/All tab, show all posts including user posts and demos
+      return [...localPosts, ...demoPosts];
     }
   };
   
@@ -253,23 +253,21 @@ const ProfilePage = () => {
         </div>
       </header>
       
-      {/* Stats */}
-      <section className="profile-stats-section">
-        <div className="profile-stats-container">
-          <div className="profile-stat-box">
-            <div className="profile-stat-number">27</div>
-            <div className="profile-stat-label">Following</div>
-          </div>
-          <div className="profile-stat-box">
-            <div className="profile-stat-number">134</div>
-            <div className="profile-stat-label">Followers</div>
-          </div>
-          <div className="profile-stat-box">
-            <div className="profile-stat-number">{localPosts.filter(post => post.authorId === currentUser?.uid).length}</div>
-            <div className="profile-stat-label">Posts</div>
-          </div>
+      {/* User stats section */}
+      <div className="user-stats">
+        <div className="stat-item">
+          <div className="stat-value">27</div>
+          <div className="stat-label">Following</div>
         </div>
-      </section>
+        <div className="stat-item">
+          <div className="stat-value">134</div>
+          <div className="stat-label">Followers</div>
+        </div>
+        <div className="stat-item">
+          <div className="stat-value">{userPostCount}</div>
+          <div className="stat-label">Posts</div>
+        </div>
+      </div>
       
       {/* Tabs */}
       <section className="profile-tabs">
@@ -280,9 +278,9 @@ const ProfilePage = () => {
               className={`profile-tab ${activeTab === tab.id ? 'active' : ''}`}
               onClick={() => tab.id === 'saved' ? handleViewSavedPosts() : handleTabChange(tab.id)}
             >
-              {tab.label} 
+              {tab.label}
               {tab.count > 0 && (
-                <span className="saved-count">{tab.count}</span>
+                <span className="profile-tab-count">{tab.count}</span>
               )}
             </button>
           ))}

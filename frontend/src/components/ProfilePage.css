@@ -194,41 +194,39 @@
   margin-top: 10px;
 }
 
-/* Stats section */
-.profile-stats-section {
-  margin-bottom: 30px;
-}
-
-.profile-stats-container {
+/* User stats styling */
+.user-stats {
   display: flex;
-  max-width: 1000px;
-  margin: 0 auto;
-  background-color: white;
-  border-radius: 10px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  overflow: hidden;
-}
-
-.profile-stat-box {
-  flex: 1;
+  justify-content: space-around;
+  background-color: #fff;
   padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  margin-bottom: 20px;
   text-align: center;
-  border-right: 1px solid #f0f0f0;
 }
 
-.profile-stat-box:last-child {
+.stat-item {
+  flex: 1;
+  padding: 0 15px;
+  border-right: 1px solid #eee;
+}
+
+.stat-item:last-child {
   border-right: none;
 }
 
-.profile-stat-number {
+.stat-value {
   font-size: 24px;
-  font-weight: 600;
+  font-weight: 700;
+  color: #333;
   margin-bottom: 5px;
 }
 
-.profile-stat-label {
+.stat-label {
   font-size: 14px;
   color: #666;
+  text-transform: capitalize;
 }
 
 /* Tabs */
@@ -606,4 +604,23 @@
 .profile-section-title p {
   color: #666;
   font-size: 0.9rem;
+}
+
+.profile-tab-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #f5a623;
+  color: white;
+  border-radius: 50%;
+  width: 20px;
+  height: 20px;
+  font-size: 12px;
+  margin-left: 6px;
+  font-weight: 600;
+}
+
+.profile-tab.active .profile-tab-count {
+  background-color: white;
+  color: #f5a623;
 } 

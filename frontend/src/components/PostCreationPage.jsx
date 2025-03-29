@@ -26,88 +26,72 @@ const PostCreationPage = ({ onClose, onPostCreated }) => {
   
   const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log("PostCreationPage: Form submitted");
-    console.log("Current form values:", { title, postContent, category, isAnonymous });
     
-    // Form validation
-    if (!title.trim()) {
-      setError('Please add a title to your post');
+    // Validate form fields
+    if (!title) {
+      showError('Please enter a title for your post');
       return;
     }
     
-    if (!postContent.trim()) {
-      setError('Please add some content to your post');
+    if (!postContent) {
+      showError('Please add some content to your post');
       return;
     }
     
     if (!category) {
-      setError('Please select a category');
+      showError('Please select a category for your post');
       return;
     }
     
+    // Set loading state
     setIsSubmitting(true);
-    setError('');
     
     try {
-      console.log("Creating post with data:", { title, category, isAnonymous });
+      console.log("Creating post with data:", { title, postContent, category, imageFile });
       
-      // Create post data with a random id to ensure uniqueness
-      const postId = Date.now() + "-" + Math.random().toString(36).substr(2, 9);
+      // Create post data object
       const postData = {
-        id: postId,
-        title: title,
+        title,
         content: postContent,
-        description: postContent.substring(0, 150) + (postContent.length > 150 ? '...' : ''),
-        category: category,
-        isAnonymous: isAnonymous,
-        authorId: currentUser?.uid || 'anonymous',
-        authorName: isAnonymous ? 'Anonymous' : (currentUser?.displayName || currentUser?.email || 'Anonymous User'),
-        createdAt: new Date(),
-        likes: 0,
-        comments: 0
+        category,
+        imageUrl: imagePreview || null,
+        isAnonymous, // Include anonymous flag
+        authorId: currentUser?.uid,
+        author: isAnonymous ? 'Anonymous' : (currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Anonymous')
       };
       
-      // Add image URL if an image is selected
-      if (imagePreview) {
-        postData.imageUrl = imagePreview;
-      }
+      // Add post through context
+      const newPost = await addNewPost(postData);
       
-      console.log("Post data prepared:", postData);
-      
-      // Add the new post to context
-      const newPost = addNewPost(postData);
-      console.log('Post created successfully:', newPost);
-      
-      // Set success message
-      setSuccess('Post created successfully!');
-      
-      // Reset form
-      setPostContent('');
-      setTitle('');
-      setCategory('');
-      setIsAnonymous(false);
-      setImageFile(null);
-      setImagePreview('');
-      
-      // Notify parent component about the new post
-      if (onPostCreated) {
-        console.log("Calling onPostCreated callback with new post");
-        onPostCreated(newPost);
-      } else {
-        console.warn("onPostCreated callback is not defined");
-      }
-      
-      // Close the post creation page after a short delay
-      setTimeout(() => {
-        if (onClose) {
-          console.log("Closing post creation modal");
-          onClose();
+      if (newPost) {
+        console.log("Post created successfully:", newPost);
+        
+        // Clear form
+        setTitle('');
+        setPostContent('');
+        setCategory('');
+        setImageFile(null);
+        setImagePreview(null);
+        
+        // Call onPostCreated callback with the new post data
+        if (onPostCreated) {
+          onPostCreated(newPost);
         }
-      }, 1500);
-      
+        
+        // Show success message briefly before closing
+        setSuccess('Post created successfully!');
+        setTimeout(() => {
+          // Close modal after successful post creation
+          if (onClose) {
+            onClose();
+          }
+        }, 1000);
+      } else {
+        showError('Failed to create post');
+      }
     } catch (error) {
-      console.error("Error creating post: ", error);
-      setError('Failed to create post: ' + (error.message || 'Unknown error'));
+      console.error("Error creating post:", error);
+      showError('An error occurred while creating your post');
     } finally {
       setIsSubmitting(false);
     }
@@ -193,6 +177,13 @@ const PostCreationPage = ({ onClose, onPostCreated }) => {
     if (fileInputRef.current) {
       fileInputRef.current.click();
     }
+  };
+  
+  const showError = (message) => {
+    setError(message);
+    setTimeout(() => {
+      setError('');
+    }, 3000);
   };
   
   return (
