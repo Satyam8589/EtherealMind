@@ -219,8 +219,29 @@ const ProfilePage = () => {
     setShowProfileSettings(false);
   };
 
+  // Toggle mobile menu
   const toggleMobileMenu = () => {
-    setMobileMenuOpen(!mobileMenuOpen);
+    console.log("Toggling mobile menu:", !mobileMenuOpen);
+    setMobileMenuOpen(prevState => !prevState);
+  };
+
+  // Handle hamburger click with event stopping
+  const handleHamburgerClick = (e) => {
+    console.log("Hamburger clicked");
+    e.stopPropagation();
+    e.preventDefault();
+    toggleMobileMenu();
+  };
+
+  // Add visual feedback for button clicks
+  const handleButtonClick = (e, callback) => {
+    const button = e.currentTarget;
+    button.classList.add('clicked');
+    
+    setTimeout(() => {
+      button.classList.remove('clicked');
+      if (callback) callback();
+    }, 150);
   };
 
   // Get all content that should be displayed based on active tab
@@ -295,18 +316,43 @@ const ProfilePage = () => {
           </div>
           
           {/* Hamburger menu for mobile */}
-          <div className="hamburger-menu" onClick={toggleMobileMenu}>
+          <button 
+            className={`hamburger-menu ${mobileMenuOpen ? 'open' : ''}`} 
+            onClick={handleHamburgerClick}
+            aria-label="Toggle navigation menu"
+            type="button"
+          >
             <span></span>
             <span></span>
             <span></span>
-          </div>
+          </button>
           
           {/* Desktop navigation */}
           <div className="profile-nav-center">
-            <Link to="/" className="profile-nav-link active">Home</Link>
-            <Link to="/explore" className="profile-nav-link">Explore</Link>
-            <a href="#" className="profile-nav-link">Notifications</a>
-            <a href="#" className="profile-nav-link">Messages</a>
+            <button 
+              className="profile-nav-link active" 
+              onClick={() => navigate('/')}
+            >
+              Home
+            </button>
+            <button 
+              className="profile-nav-link" 
+              onClick={() => navigate('/explore')}
+            >
+              Explore
+            </button>
+            <button 
+              className="profile-nav-link" 
+              onClick={() => alert("Notifications feature coming soon!")}
+            >
+              Notifications
+            </button>
+            <button 
+              className="profile-nav-link" 
+              onClick={() => alert("Messages feature coming soon!")}
+            >
+              Messages
+            </button>
           </div>
           
           {/* Mobile navigation menu */}
@@ -316,16 +362,92 @@ const ProfilePage = () => {
                 <div className="mobile-avatar">{userName.charAt(0).toUpperCase()}</div>
                 <span className="mobile-username">{userName}</span>
               </div>
-              <button className="mobile-menu-close" onClick={toggleMobileMenu}>×</button>
+              <button 
+                className="mobile-menu-close" 
+                onClick={() => toggleMobileMenu()}
+                aria-label="Close menu"
+                type="button"
+              >
+                ×
+              </button>
             </div>
+            
             <div className="mobile-menu-items">
-              <Link to="/" className="mobile-menu-item">Home</Link>
-              <Link to="/explore" className="mobile-menu-item">Explore</Link>
-              <a href="#" className="mobile-menu-item">Notifications</a>
-              <a href="#" className="mobile-menu-item">Messages</a>
+              <button 
+                className="mobile-menu-item"
+                onClick={() => {
+                  toggleMobileMenu();
+                  navigate('/');
+                }}
+                role="menuitem"
+                type="button"
+              >
+                Home
+              </button>
+              
+              <button 
+                className="mobile-menu-item"
+                onClick={() => {
+                  toggleMobileMenu();
+                  navigate('/explore');
+                }}
+                role="menuitem"
+                type="button"
+              >
+                Explore
+              </button>
+              
+              <button 
+                className="mobile-menu-item" 
+                onClick={() => {
+                  toggleMobileMenu();
+                  alert("Notifications feature coming soon!");
+                }}
+                role="menuitem"
+                type="button"
+              >
+                Notifications
+              </button>
+              
+              <button 
+                className="mobile-menu-item" 
+                onClick={() => {
+                  toggleMobileMenu();
+                  alert("Messages feature coming soon!");
+                }}
+                role="menuitem"
+                type="button"
+              >
+                Messages
+              </button>
+              
               <div className="mobile-menu-divider"></div>
-              <a href="#" className="mobile-menu-item" onClick={handleEditProfile}>Edit Profile</a>
-              <button className="mobile-menu-item logout" onClick={handleLogout}>Logout</button>
+              
+              <button 
+                className="mobile-menu-item" 
+                onClick={() => {
+                  console.log("Edit Profile button clicked");
+                  toggleMobileMenu();
+                  handleEditProfile();
+                }}
+                role="menuitem"
+                type="button"
+              >
+                Edit Profile
+              </button>
+              
+              <button 
+                className="mobile-menu-item logout" 
+                onClick={() => {
+                  console.log("Logout button clicked");
+                  toggleMobileMenu();
+                  handleLogout();
+                }}
+                role="menuitem"
+                type="button"
+              >
+                Logout
+              </button>
             </div>
           </div>
           
@@ -461,8 +583,8 @@ const ProfilePage = () => {
               </p>
               
               {/* Posts list */}
-              {filteredContent.map(post => (
-                <div key={post.id} className={`profile-course-card ${post.isDemo ? 'demo-post' : ''}`}>
+              {filteredContent.map((post, index) => (
+                <div key={`${post.id}-${index}`} className={`profile-course-card ${post.isDemo ? 'demo-post' : ''}`}>
                   <div className="profile-course-image">
                     <img 
                       src={post.image || post.imageUrl} 
@@ -528,7 +650,12 @@ const ProfilePage = () => {
       )}
 
       {/* Overlay for mobile menu */}
-      {mobileMenuOpen && <div className="mobile-menu-overlay" onClick={toggleMobileMenu}></div>}
+      {mobileMenuOpen && (
+        <div 
+          className="mobile-menu-overlay" 
+          onClick={toggleMobileMenu}
+        ></div>
+      )}
     </div>
   );
 };
