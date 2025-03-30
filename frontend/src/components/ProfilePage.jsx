@@ -25,13 +25,45 @@ const ProfilePage = () => {
   // Load all posts when component mounts
   useEffect(() => {
     console.log("ProfilePage: Posts from allPosts:", allPosts);
+    
     if (allPosts && allPosts.length > 0) {
+      // Make sure we have all posts loaded
       setLocalPosts(allPosts);
       console.log("ProfilePage: Setting localPosts:", allPosts);
     } else {
       // Fallback to mock data if no posts in context
-      setLocalPosts([]);
-      console.log("ProfilePage: No posts found in allPosts");
+      const mockPosts = [
+        {
+          id: 201,
+          title: 'Understanding Meditation',
+          content: 'Meditation is a practice that involves training your attention and awareness to achieve mental clarity and emotional calm.',
+          category: 'Meditation',
+          author: 'John Doe',
+          date: '2023-05-15',
+          image: 'https://images.unsplash.com/photo-1508672019048-805c876b67e2?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60'
+        },
+        {
+          id: 202,
+          title: 'Dream Interpretation',
+          content: 'Dreams often reflect our subconscious thoughts and emotions, providing insights into our inner conflicts and desires.',
+          category: 'Dreams',
+          author: 'Jane Smith',
+          date: '2023-05-20',
+          image: 'https://images.unsplash.com/photo-1515894274780-af5d4d90ba32?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60'
+        },
+        {
+          id: 203,
+          title: 'Chakra Healing',
+          content: 'Chakra healing focuses on balancing the seven energy centers in the body to promote physical and emotional well-being.',
+          category: 'Healing',
+          author: 'Alex Johnson',
+          date: '2023-05-25',
+          image: 'https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60'
+        }
+      ];
+      
+      setLocalPosts(mockPosts);
+      console.log("ProfilePage: No posts found in allPosts, using mock data:", mockPosts);
     }
   }, [allPosts]);
   
@@ -644,8 +676,8 @@ const ProfilePage = () => {
       
       {/* Profile Settings Modal */}
       {showProfileSettings && (
-        <UserProfileSettings
-          onClose={handleCloseProfileSettings}
+        <UserProfileSettings 
+          onClose={() => setShowProfileSettings(false)}
         />
       )}
 

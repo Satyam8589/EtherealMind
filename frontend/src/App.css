@@ -1007,3 +1007,10 @@ footer {
     justify-content: center;
   }
 }
+
+.demo-credentials {
+  font-size: 0.85rem;
+  color: #777;
+  margin-top: 5px;
+  text-align: center;
+}

@@ -46,44 +46,35 @@ const SignupForm = ({ isOpen, onClose, onSwitchToLogin }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     const errors = validate();
-    setAuthError('');
     
     if (Object.keys(errors).length === 0) {
       setIsSubmitting(true);
       setFormErrors({});
+      setAuthError('');
       
       try {
-        console.log('Attempting signup with:', formData.email);
-        await signup(formData.email, formData.password, formData.fullName);
-        console.log('Signup successful');
+        // Attempt to register the user
+        console.log('Submitting signup form with email:', formData.email);
+        const user = await signup(formData.email, formData.password, formData.fullName);
+        console.log('Signup successful, user created:', user);
+        
+        // Make sure data is saved to localStorage correctly
+        const users = JSON.parse(localStorage.getItem('users') || '{}');
+        console.log('Current users in localStorage:', Object.keys(users));
+        
+        // Show success message before closing
         setSubmitSuccess(true);
-        // Reset form after success
+        
+        // Close after a delay
         setTimeout(() => {
+          console.log('Closing signup form after successful registration');
           onClose();
-          setSubmitSuccess(false);
-          setFormData({
-            fullName: '',
-            email: '',
-            password: ''
-          });
-        }, 2000);
+          onSwitchToLogin(); // Direct to login
+        }, 1500);
       } catch (error) {
-        console.error('Signup error:', error.code, error.message);
-        
-        // More detailed error messages
-        let errorMessage = 'Failed to create an account. Please try again.';
-        
-        if (error.code === 'auth/email-already-in-use') {
-          errorMessage = 'This email is already registered. Try logging in instead.';
-        } else if (error.code === 'auth/invalid-email') {
-          errorMessage = 'Invalid email format. Please check your email address.';
-        } else if (error.code === 'auth/weak-password') {
-          errorMessage = 'Password is too weak. Please use a stronger password.';
-        } else if (error.code === 'auth/network-request-failed') {
-          errorMessage = 'Network error. Please check your connection and try again.';
-        }
-        
-        setAuthError(errorMessage);
+        console.error('Signup form error:', error);
+        setAuthError(getErrorMessage(error.code || 'unknown'));
+      } finally {
         setIsSubmitting(false);
       }
     } else {

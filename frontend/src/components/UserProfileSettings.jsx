@@ -1,142 +1,151 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { doc, setDoc, getDoc } from 'firebase/firestore';
-import { updateProfile } from 'firebase/auth';
-import { app, db } from '../firebase';
 import './UserProfileSettings.css';
 
 const UserProfileSettings = ({ onClose }) => {
   const { currentUser } = useAuth();
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState({ text: '', type: '' });
   const [formData, setFormData] = useState({
-    displayName: currentUser?.displayName || '',
+    displayName: '',
     bio: '',
     website: '',
-    location: ''
+    twitter: '',
+    instagram: ''
   });
-  const [firestoreAvailable, setFirestoreAvailable] = useState(true);
+  const [formErrors, setFormErrors] = useState({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
+  const [apiError, setApiError] = useState('');
 
   useEffect(() => {
-    const fetchUserProfile = async () => {
-      if (!currentUser) return;
-      
-      // Initialize with current auth data first
-      setFormData(prev => ({
-        ...prev,
-        displayName: currentUser.displayName || currentUser.email?.split('@')[0] || '',
-      }));
-      
-      setLoading(true);
+    // Load user data when component mounts
+    const loadUserData = () => {
       try {
-        // Try to get user data from Firestore
-        const userDoc = await getDoc(doc(db, "users", currentUser.uid));
+        // Get current user from localStorage
+        const user = JSON.parse(localStorage.getItem('currentUser'));
         
-        // If user document exists, use its data
-        if (userDoc.exists()) {
-          const userData = userDoc.data();
-          setFormData({
-            displayName: currentUser.displayName || '',
-            bio: userData.bio || '',
-            website: userData.website || '',
-            location: userData.location || ''
-          });
-          setFirestoreAvailable(true);
+        if (!user) {
+          setApiError("User not found. Please log in again.");
+          return;
         }
-      } catch (error) {
-        console.error("Error fetching user profile:", error);
-        setFirestoreAvailable(false);
-        setMessage({
-          text: "Unable to access your full profile data. Basic profile editing is available.",
-          type: "warning"
+        
+        // Get all users
+        const savedUserData = localStorage.getItem('users') ? 
+          JSON.parse(localStorage.getItem('users')) : {};
+        
+        if (!savedUserData[user.email]) {
+          setApiError("User data not found. Please log in again.");
+          return;
+        }
+        
+        // Get user profile data
+        const userData = savedUserData[user.email];
+        const profileLinks = userData.profileLinks || {};
+        
+        // Update form data
+        setFormData({
+          displayName: userData.displayName || '',
+          bio: userData.bio || '',
+          website: profileLinks.website || '',
+          twitter: profileLinks.twitter || '',
+          instagram: profileLinks.instagram || ''
         });
-      } finally {
-        setLoading(false);
+        
+      } catch (error) {
+        console.error("Error loading user data:", error);
+        setApiError("Failed to load profile data. Please try again.");
       }
     };
     
-    fetchUserProfile();
-  }, [currentUser]);
+    loadUserData();
+  }, []);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
+    setFormData({
+      ...formData,
       [name]: value
-    }));
+    });
+    
+    // Clear form errors
+    if (formErrors[name]) {
+      setFormErrors({
+        ...formErrors,
+        [name]: ''
+      });
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!currentUser) {
-      setMessage({
-        text: "You must be logged in to update your profile",
-        type: "error"
-      });
+    // Validate forms
+    const errors = {};
+    if (!formData.displayName.trim()) {
+      errors.displayName = "Display name is required";
+    }
+    
+    if (Object.keys(errors).length > 0) {
+      setFormErrors(errors);
       return;
     }
     
-    setLoading(true);
-    setMessage({ text: '', type: '' });
+    setIsSubmitting(true);
+    setSuccessMessage("");
+    setApiError("");
     
     try {
-      // Always update displayName in Firebase Auth (this shouldn't require special permissions)
-      if (formData.displayName !== currentUser.displayName) {
-        await updateProfile(currentUser, {
-          displayName: formData.displayName
-        });
+      // Get current user from localStorage
+      const currentUser = JSON.parse(localStorage.getItem('currentUser'));
+      
+      if (!currentUser) {
+        throw new Error("User not found");
       }
       
-      // Only try to update Firestore if it was available during fetch
-      if (firestoreAvailable) {
-        try {
-          // Save profile data to Firestore
-          await setDoc(doc(db, "users", currentUser.uid), {
-            uid: currentUser.uid,
-            displayName: formData.displayName,
-            email: currentUser.email,
-            bio: formData.bio,
-            website: formData.website,
-            location: formData.location,
-            updatedAt: new Date()
-          }, { merge: true });
-          
-          setMessage({
-            text: "Profile updated successfully!",
-            type: "success"
-          });
-        } catch (firestoreError) {
-          console.error("Error updating Firestore profile:", firestoreError);
-          setFirestoreAvailable(false);
-          
-          // Still show success for auth update
-          setMessage({
-            text: "Basic profile updated. Additional data couldn't be saved.",
-            type: "warning"
-          });
+      // Get all users
+      const savedUserData = localStorage.getItem('users') ? 
+        JSON.parse(localStorage.getItem('users')) : {};
+      
+      if (!savedUserData[currentUser.email]) {
+        throw new Error("User data not found");
+      }
+      
+      // Update user data
+      savedUserData[currentUser.email] = {
+        ...savedUserData[currentUser.email],
+        displayName: formData.displayName,
+        bio: formData.bio,
+        profileLinks: {
+          website: formData.website,
+          twitter: formData.twitter,
+          instagram: formData.instagram
         }
-      } else {
-        // If Firestore wasn't available, just show success for auth update
-        setMessage({
-          text: "Display name updated successfully!",
-          type: "success"
-        });
-      }
+      };
       
-      // Close modal after a delay
+      // Save updated user data
+      localStorage.setItem('users', JSON.stringify(savedUserData));
+      
+      // Update current user session
+      const updatedUser = {
+        ...currentUser,
+        displayName: formData.displayName
+      };
+      
+      localStorage.setItem('currentUser', JSON.stringify(updatedUser));
+      
+      setSuccessMessage("Profile updated successfully!");
+      
+      // Close modal after success
       setTimeout(() => {
-        if (onClose) onClose();
+        onClose();
+        // Force page refresh to show updated profile
+        window.location.reload();
       }, 1500);
       
     } catch (error) {
       console.error("Error updating profile:", error);
-      setMessage({
-        text: "Failed to update profile. Please try again.",
-        type: "error"
-      });
+      setApiError("Failed to update profile. Please try again.");
     } finally {
-      setLoading(false);
+      setIsSubmitting(false);
     }
   };
 
@@ -148,9 +157,22 @@ const UserProfileSettings = ({ onClose }) => {
           <button className="close-button" onClick={onClose}>×</button>
         </div>
         
+        {/* Success and error messages */}
+        {successMessage && (
+          <div className="message success">
+            {successMessage}
+          </div>
+        )}
+        
+        {apiError && (
+          <div className="message error">
+            {apiError}
+          </div>
+        )}
+        
         <form onSubmit={handleSubmit} className="profile-settings-form">
           <div className="form-group">
-            <label htmlFor="displayName">Display Name</label>
+            <label htmlFor="displayName">Display Name*</label>
             <input
               type="text"
               id="displayName"
@@ -158,7 +180,11 @@ const UserProfileSettings = ({ onClose }) => {
               value={formData.displayName}
               onChange={handleChange}
               placeholder="Your display name"
+              className={formErrors.displayName ? "error" : ""}
             />
+            {formErrors.displayName && (
+              <span className="error-message">{formErrors.displayName}</span>
+            )}
           </div>
           
           <div className="form-group">
@@ -170,9 +196,7 @@ const UserProfileSettings = ({ onClose }) => {
               onChange={handleChange}
               placeholder="Tell us about yourself"
               rows={3}
-              disabled={!firestoreAvailable}
             />
-            {!firestoreAvailable && <small className="field-note">Extended profile features unavailable</small>}
           </div>
           
           <div className="form-group">
@@ -184,44 +208,47 @@ const UserProfileSettings = ({ onClose }) => {
               value={formData.website}
               onChange={handleChange}
               placeholder="Your website URL"
-              disabled={!firestoreAvailable}
             />
           </div>
           
           <div className="form-group">
-            <label htmlFor="location">Location</label>
+            <label htmlFor="twitter">Twitter</label>
             <input
-              type="text"
-              id="location"
-              name="location"
-              value={formData.location}
+              type="url"
+              id="twitter"
+              name="twitter"
+              value={formData.twitter}
               onChange={handleChange}
-              placeholder="Your location"
-              disabled={!firestoreAvailable}
+              placeholder="Your Twitter URL"
             />
           </div>
           
-          {message.text && (
-            <div className={`message ${message.type}`}>
-              {message.text}
-            </div>
-          )}
+          <div className="form-group">
+            <label htmlFor="instagram">Instagram</label>
+            <input
+              type="url"
+              id="instagram"
+              name="instagram"
+              value={formData.instagram}
+              onChange={handleChange}
+              placeholder="Your Instagram URL"
+            />
+          </div>
           
           <div className="form-buttons">
             <button 
               type="button" 
               className="cancel-button" 
               onClick={onClose}
-              disabled={loading}
             >
               Cancel
             </button>
-            <button
-              type="submit"
-              className="save-button"
-              disabled={loading}
+            <button 
+              type="submit" 
+              className={`save-button ${isSubmitting ? 'loading' : ''}`}
+              disabled={isSubmitting}
             >
-              {loading ? "Saving..." : "Save Profile"}
+              {isSubmitting ? 'Saving...' : 'Save Changes'}
             </button>
           </div>
         </form>

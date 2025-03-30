@@ -102,7 +102,7 @@ const LoginForm = ({ isOpen, onClose, onSwitchToSignup }) => {
         onClose();
       } catch (error) {
         console.error('Login form error:', error.code, error.message);
-        setAuthError(getFirebaseErrorMessage(error.code));
+        setAuthError(getFirebaseErrorMessage(error.code || 'auth/unknown'));
       } finally {
         setIsSubmitting(false);
       }
@@ -126,6 +126,9 @@ const LoginForm = ({ isOpen, onClose, onSwitchToSignup }) => {
         
         <div className="modal-header">
           <h2>Log In</h2>
+          <p className="demo-credentials">
+            Demo: demo@example.com / password123
+          </p>
         </div>
         
         <form onSubmit={handleSubmit} className="signup-form">

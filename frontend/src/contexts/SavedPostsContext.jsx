@@ -16,81 +16,95 @@ export function SavedPostsProvider({ children }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Load mock data for initial state
+  // Initialize posts from localStorage
   useEffect(() => {
-    console.log("SavedPostsContext: Initializing...");
-    
-    // Try to load posts from localStorage first
     try {
-      const storedPosts = localStorage.getItem('allPosts');
-      if (storedPosts) {
-        const parsedPosts = JSON.parse(storedPosts);
-        console.log(`SavedPostsContext: Found ${parsedPosts.length} posts in localStorage`);
-        setAllPosts(parsedPosts);
+      // Load saved posts
+      const savedPostsJson = localStorage.getItem('savedPosts');
+      if (savedPostsJson) {
+        setSavedPosts(JSON.parse(savedPostsJson));
+        console.log("Loaded saved posts from localStorage");
+      }
+      
+      // Load all posts
+      const postsJson = localStorage.getItem('posts');
+      if (postsJson) {
+        let loadedPosts = JSON.parse(postsJson);
+        
+        // Clean up duplicate posts
+        loadedPosts = cleanupDuplicatePosts(loadedPosts);
+        
+        setAllPosts(loadedPosts);
+        console.log("Loaded all posts from localStorage:", loadedPosts.length);
       } else {
-        // Example mock posts (fallback)
-        console.log("SavedPostsContext: No posts found in localStorage, using mock data");
-        const mockPosts = [
+        // Load demo posts if no posts exist
+        const demoPosts = [
           {
-            id: '101',
-            title: 'The Art of Stand-Up Comedy',
-            content: 'Discover the secrets behind making people laugh and the challenges comedians face in a stand-up performance.',
-            category: 'Comedy',
-            authorId: 'user123',
-            authorName: 'John Doe',
-            createdAt: new Date(),
-            likes: 42,
-            comments: 7,
-            image: 'https://images.unsplash.com/photo-1527224538127-2104bb71c51b?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60'
+            id: 101,
+            title: 'Understanding Meditation',
+            content: 'Meditation is a practice where an individual uses a technique – such as mindfulness, or focusing the mind on a particular object, thought, or activity – to train attention and awareness, and achieve a mentally clear and emotionally calm and stable state.',
+            category: 'Meditation',
+            author: 'Mindful Master',
+            date: '2023-04-15',
+            createdAt: new Date().toISOString()
           },
           {
-            id: '102',
-            title: 'Fuel Your Motivation',
-            content: 'Explore strategies to boost your motivation and achieve your personal and professional goals.',
-            category: 'Motivation',
-            authorId: 'user456',
-            authorName: 'Jane Smith',
-            createdAt: new Date(),
-            likes: 36,
-            comments: 12,
-            image: 'https://images.unsplash.com/photo-1519834584171-e03a7fefd0a7?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60'
+            id: 102,
+            title: 'Dream Analysis Techniques',
+            content: 'Dream analysis is the process of assigning meaning to dreams. Dreams can be analyzed from many perspectives, including psychological, spiritual, and cultural. Some believe dreams reveal unconscious desires and thoughts.',
+            category: 'Dreams',
+            author: 'Sleep Sage',
+            date: '2023-04-20',
+            createdAt: new Date().toISOString()
           },
           {
-            id: '103',
-            title: 'Business Strategies for Growth',
-            content: 'Learn about innovative business strategies that can help your company grow and thrive in today\'s competitive market.',
-            category: 'Business',
-            authorId: 'user789',
-            authorName: 'Robert Johnson',
-            createdAt: new Date(),
-            likes: 28,
-            comments: 5,
-            image: 'https://images.unsplash.com/photo-1560264280-88b68371db39?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60'
+            id: 103,
+            title: 'Chakra Healing Basics',
+            content: 'Chakra healing is focused on the belief that the body contains seven energy centers, from the base of the spine to the top of the head. When the chakras are open and aligned, energy can flow freely through the body.',
+            category: 'Healing',
+            author: 'Energy Expert',
+            date: '2023-04-25',
+            createdAt: new Date().toISOString()
           }
         ];
-
-        setAllPosts(mockPosts);
-        // Store mock posts to localStorage for future use
-        localStorage.setItem('allPosts', JSON.stringify(mockPosts));
+        
+        // Save demo posts to localStorage
+        localStorage.setItem('posts', JSON.stringify(demoPosts));
+        setAllPosts(demoPosts);
+        console.log("Created demo posts:", demoPosts.length);
       }
-    } catch (err) {
-      console.error('Error loading posts from localStorage:', err);
-      // Fallback to mock data
-      setAllPosts([]);
-    }
-
-    // Load saved posts from localStorage
-    try {
-      const savedPostsFromStorage = localStorage.getItem('savedPosts');
-      if (savedPostsFromStorage) {
-        setSavedPosts(JSON.parse(savedPostsFromStorage));
-        console.log('SavedPostsContext: Loaded saved posts from localStorage');
-      }
-    } catch (err) {
-      console.error('Error parsing saved posts from localStorage:', err);
-      setSavedPosts([]);
+    } catch (error) {
+      console.error("Error initializing posts:", error);
     }
   }, []);
+
+  // Function to clean up duplicate posts
+  const cleanupDuplicatePosts = (posts) => {
+    const uniquePosts = [];
+    const seenTitles = new Set();
+    
+    // Keep only one post with the same title
+    for (const post of posts) {
+      // Skip posts without title
+      if (!post.title) continue;
+      
+      // Create a key from title and content
+      const key = `${post.title}:${post.content?.substring(0, 50)}`;
+      
+      if (!seenTitles.has(key)) {
+        seenTitles.add(key);
+        uniquePosts.push(post);
+      }
+    }
+    
+    // If we removed duplicates, save the cleaned list back to localStorage
+    if (uniquePosts.length < posts.length) {
+      console.log(`Removed ${posts.length - uniquePosts.length} duplicate posts`);
+      localStorage.setItem('posts', JSON.stringify(uniquePosts));
+    }
+    
+    return uniquePosts;
+  };
 
   // Save to localStorage whenever savedPosts changes
   useEffect(() => {
@@ -100,56 +114,69 @@ export function SavedPostsProvider({ children }) {
     }
   }, [savedPosts]);
 
-  // IMPORTANT: Function to add a new post
+  // Add a new post to the list
   const addNewPost = (post) => {
-    console.log("SavedPostsContext: Adding new post", post);
-    
-    if (!post || !post.title) {
-      console.error("Cannot add post: Invalid post data", post);
-      showToast("Error: Invalid post data", "error");
-      return null;
-    }
-    
-    try {
-      // Generate a unique ID if not provided
-      const newPost = {
-        ...post,
-        id: post.id || Date.now().toString(),
-        createdAt: post.createdAt || new Date(),
-        likes: post.likes || 0,
-        comments: post.comments || 0
-      };
-      
-      if (!newPost.authorId && currentUser) {
-        newPost.authorId = currentUser.uid;
-        newPost.authorName = post.isAnonymous ? 'Anonymous' : (currentUser.displayName || currentUser.email || 'Anonymous');
-      }
-      
-      // Add to all posts
-      setAllPosts(prevPosts => {
-        const updatedPosts = [newPost, ...prevPosts];
-        // Save all posts to localStorage for persistence
-        try {
-          localStorage.setItem('allPosts', JSON.stringify(updatedPosts));
-          console.log('SavedPostsContext: Saved all posts to localStorage');
-        } catch (err) {
-          console.error('Error saving posts to localStorage:', err);
+    return new Promise((resolve, reject) => {
+      try {
+        // Log the post being created
+        console.log("Creating new post:", post);
+        
+        // Generate a unique ID if not provided
+        const newPost = {
+          ...post,
+          id: post.id || `post_${Date.now()}`,
+          date: post.date || new Date().toISOString().split('T')[0],
+          createdAt: new Date().toISOString()
+        };
+        
+        // Get current posts from localStorage
+        const storedPosts = localStorage.getItem('posts');
+        const currentPosts = storedPosts ? JSON.parse(storedPosts) : [];
+        
+        // Check for duplicates (same title and content within last 10 seconds)
+        const isDuplicate = currentPosts.some(existingPost => {
+          const isSameTitle = existingPost.title === newPost.title;
+          const isSameContent = existingPost.content === newPost.content;
+          const isRecent = existingPost.createdAt && 
+            (new Date() - new Date(existingPost.createdAt)) < 10000; // 10 seconds
+          
+          return isSameTitle && isSameContent && isRecent;
+        });
+        
+        if (isDuplicate) {
+          console.warn("Duplicate post detected, not adding");
+          showToast("This post already exists", "warning");
+          throw new Error("Duplicate post");
         }
-        return updatedPosts;
-      });
-      
-      // Show success toast notification
-      showToast('Post created successfully!', 'success');
-      
-      console.log('SavedPostsContext: Added new post', newPost);
-      
-      // Return the new post object
-      return newPost;
-    } catch (error) {
-      console.error("Error adding new post:", error);
-      showToast("Failed to create post", "error");
-      return null;
-    }
+        
+        // Add new post at the beginning of the array
+        const updatedPosts = [newPost, ...currentPosts];
+        
+        // Save back to localStorage
+        localStorage.setItem('posts', JSON.stringify(updatedPosts));
+        
+        // Update state
+        setAllPosts(updatedPosts);
+        
+        // Show success toast
+        showToast("Post created successfully!", "success");
+        
+        console.log("Post created successfully:", newPost);
+        console.log("Total posts:", updatedPosts.length);
+        
+        // Return the created post
+        resolve({
+          post: newPost,
+          totalPosts: updatedPosts.length
+        });
+      } catch (error) {
+        console.error("Error creating post:", error);
+        if (error.message !== "Duplicate post") {
+          showToast("Failed to create post. Please try again.", "error");
+        }
+        reject(error);
+      }
+    });
   };
 
   // Check if post is saved
@@ -184,16 +211,24 @@ export function SavedPostsProvider({ children }) {
         );
         setSavedPosts(updatedSavedPosts);
         showToast("Post removed from saved items", "info");
+        
+        // Also update localStorage
+        localStorage.setItem('savedPosts', JSON.stringify(updatedSavedPosts));
       } else {
         // Add post to saved posts
         const newSavedItem = {
           postId: post.id,
           title: post.title,
           category: post.category,
-          savedAt: new Date().toISOString()
+          savedAt: new Date().toISOString(),
+          userId: currentUser.uid
         };
-        setSavedPosts([...savedPosts, newSavedItem]);
+        const updatedSavedPosts = [...savedPosts, newSavedItem];
+        setSavedPosts(updatedSavedPosts);
         showToast("Post saved successfully", "success");
+        
+        // Also update localStorage
+        localStorage.setItem('savedPosts', JSON.stringify(updatedSavedPosts));
       }
     } catch (error) {
       console.error("Error saving post:", error);
