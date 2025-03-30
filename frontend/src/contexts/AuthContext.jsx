@@ -48,15 +48,42 @@ export function AuthProvider({ children }) {
     try {
       console.log(`Signing up user: ${email}`);
       
-      // Create user object
-      const user = {
-        uid: generateUniqueId(),
+      // Get existing users or initialize empty object
+      const savedUserData = localStorage.getItem('users') ? 
+        JSON.parse(localStorage.getItem('users')) : {};
+      
+      // Check if user already exists
+      if (savedUserData[email]) {
+        throw { code: 'auth/email-already-in-use', message: 'Email already in use' };
+      }
+      
+      // Generate a unique ID for the user
+      const uid = generateUniqueId();
+      
+      // Create user object with password (in a real app, we would hash the password)
+      const newUser = {
+        uid,
         email,
+        password, // In a real app, this would be hashed
         displayName: displayName || email.split('@')[0],
         createdAt: new Date().toISOString()
       };
       
-      // Save to localStorage
+      // Add user to users object
+      savedUserData[email] = newUser;
+      
+      // Save updated users to localStorage
+      localStorage.setItem('users', JSON.stringify(savedUserData));
+      
+      // Create user object without password for current session
+      const user = {
+        uid,
+        email,
+        displayName: newUser.displayName,
+        createdAt: newUser.createdAt
+      };
+      
+      // Save to localStorage for session
       localStorage.setItem('currentUser', JSON.stringify(user));
       setCurrentUser(user);
       
@@ -77,18 +104,31 @@ export function AuthProvider({ children }) {
     setError(null);
     
     try {
-      console.log(`Logging in user: ${email}`);
+      console.log(`Attempting to log in user: ${email}`);
       
-      // In a real app, we would validate credentials here
-      // For this demo, we'll just create a user object
+      // Get stored user data
+      const savedUserData = localStorage.getItem('users') ? 
+        JSON.parse(localStorage.getItem('users')) : {};
+      
+      // Check if user exists
+      if (!savedUserData[email]) {
+        throw { code: 'auth/user-not-found', message: 'No user found with this email' };
+      }
+      
+      // Validate password (in a real app, we would use proper password hashing)
+      if (savedUserData[email].password !== password) {
+        throw { code: 'auth/wrong-password', message: 'Incorrect password' };
+      }
+      
+      // Create user object without the password
       const user = {
-        uid: generateUniqueId(),
+        uid: savedUserData[email].uid,
         email,
-        displayName: email.split('@')[0],
-        createdAt: new Date().toISOString()
+        displayName: savedUserData[email].displayName,
+        createdAt: savedUserData[email].createdAt
       };
       
-      // Save to localStorage
+      // Save to localStorage for session
       localStorage.setItem('currentUser', JSON.stringify(user));
       setCurrentUser(user);
       
