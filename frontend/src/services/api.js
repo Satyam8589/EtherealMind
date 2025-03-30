@@ -149,14 +149,62 @@ export const api = {
     }
   },
   
+  // Get stats
+  getStats: async () => {
+    try {
+      const endpoints = ['stats', 'api/stats'];
+      
+      for (const endpoint of endpoints) {
+        try {
+          const result = await fetchWithFallback(endpoint);
+          if (result && result.data) {
+            return { success: true, stats: result.data };
+          }
+        } catch (error) {
+          console.warn(`API: Failed to fetch stats from ${endpoint}:`, error);
+        }
+      }
+      
+      throw new Error('Failed to fetch stats from all endpoints');
+    } catch (error) {
+      console.error('API: Get stats failed:', error);
+      return { 
+        success: false, 
+        error: error.message,
+        // Fallback stats if API fails
+        stats: {
+          totalPosts: 0,
+          totalViews: 0,
+          lastUpdated: new Date().toISOString()
+        }
+      };
+    }
+  },
+  
   // Create a new post
   createPost: async (postData) => {
     try {
-      const data = await fetchWithFallback('saved-posts', {
-        method: 'POST',
-        body: JSON.stringify(postData)
-      });
-      return { success: true, post: data };
+      const endpoints = ['saved-posts', 'api/create-post'];
+      
+      for (const endpoint of endpoints) {
+        try {
+          const result = await fetchWithFallback(endpoint, {
+            method: 'POST',
+            body: JSON.stringify(postData),
+            headers: {
+              'Content-Type': 'application/json'
+            }
+          });
+          
+          if (result && result.data) {
+            return { success: true, post: result.data, totalPosts: result.totalPosts };
+          }
+        } catch (error) {
+          console.warn(`API: Failed to create post using ${endpoint}:`, error);
+        }
+      }
+      
+      throw new Error('Failed to create post using all endpoints');
     } catch (error) {
       console.error('API: Create post failed:', error);
       return { success: false, error: error.message };

@@ -16,6 +16,7 @@ const ProfilePage = () => {
   const [localPosts, setLocalPosts] = useState([]);
   const [demoPostsVisible, setDemoPostsVisible] = useState(true); // Control visibility of demo posts
   const [showProfileSettings, setShowProfileSettings] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const navigate = useNavigate();
   
   // Get user's display name or email as fallback
@@ -23,20 +24,61 @@ const ProfilePage = () => {
 
   // Load all posts when component mounts
   useEffect(() => {
+    console.log("ProfilePage: Posts from allPosts:", allPosts);
     if (allPosts && allPosts.length > 0) {
       setLocalPosts(allPosts);
+      console.log("ProfilePage: Setting localPosts:", allPosts);
     } else {
       // Fallback to mock data if no posts in context
       setLocalPosts([]);
+      console.log("ProfilePage: No posts found in allPosts");
     }
   }, [allPosts]);
   
-  // Calculate user's post count - only count posts authored by current user
-  const userPostCount = localPosts.filter(post => 
-    post.authorId === currentUser?.uid || 
-    post.author === currentUser?.displayName || 
-    post.author === currentUser?.email
-  ).length;
+  // Function to check if a post is created by current user
+  const isUserPost = (post) => {
+    if (!post || !currentUser) {
+      console.log("isUserPost: No post or currentUser", { post, currentUser });
+      return false;
+    }
+    
+    // Get user identifiers
+    const userId = currentUser.uid;
+    const userEmail = currentUser.email;
+    const userDisplayName = currentUser.displayName;
+    const emailUsername = userEmail ? userEmail.split('@')[0] : null;
+    
+    // Get post author identifiers
+    const postAuthorId = post.authorId;
+    const postAuthor = post.author || post.authorName;
+    const postUserId = post.userId;
+    
+    // Log all identifiers for debugging
+    console.log("isUserPost: Checking identifiers", { 
+      userId, userEmail, userDisplayName, emailUsername,
+      postAuthorId, postAuthor, postUserId,
+      post
+    });
+    
+    // Check multiple ways a post could be associated with user
+    const matchById = userId && (postAuthorId === userId || postUserId === userId);
+    const matchByEmail = userEmail && postAuthor === userEmail;
+    const matchByDisplayName = userDisplayName && postAuthor === userDisplayName;
+    const matchByUsername = emailUsername && postAuthor === emailUsername;
+    
+    // If the post was recently created in this session, also consider it a match
+    const isRecentlyCreated = post.isCurrentUserPost === true;
+    
+    const isMatch = matchById || matchByEmail || matchByDisplayName || matchByUsername || isRecentlyCreated;
+    console.log(`isUserPost: Post ${post.id} matches user: ${isMatch}`, {
+      matchById, matchByEmail, matchByDisplayName, matchByUsername, isRecentlyCreated
+    });
+    
+    return isMatch;
+  };
+
+  // Calculate user's post count more accurately
+  const userPostCount = localPosts.filter(post => isUserPost(post)).length;
 
   // Demo posts - kept separate from user posts
   const demoPosts = [
@@ -78,7 +120,7 @@ const ProfilePage = () => {
   const tabOptions = [
     { id: 'recommended', label: 'Recommended' },
     { id: 'saved', label: 'Saved', count: savedPosts?.length },
-    { id: 'created', label: 'Your Posts' },
+    { id: 'created', label: 'Your Posts', count: userPostCount },
     { id: 'demo', label: 'Demo Content', count: demoPosts.length }
   ];
 
@@ -91,6 +133,7 @@ const ProfilePage = () => {
   };
 
   const handleTabChange = (tab) => {
+    console.log("Changing tab to:", tab);
     setActiveTab(tab);
   };
 
@@ -105,10 +148,17 @@ const ProfilePage = () => {
   };
 
   const handlePostCreated = (newPost) => {
-    console.log("New post created:", newPost);
+    console.log("ProfilePage: New post created:", newPost);
     
-    // No need to manually add to localPosts, as the addNewPost function in SavedPostsContext
-    // already adds it to allPosts which is used to populate localPosts via useEffect
+    // Mark the post as created by the current user to ensure it appears in Your Posts tab
+    const postWithUserFlag = {
+      ...newPost,
+      isCurrentUserPost: true,
+      authorId: currentUser?.uid || 'current-user'
+    };
+    
+    // Manually update localPosts to ensure immediate display
+    setLocalPosts(prevPosts => [postWithUserFlag, ...prevPosts]);
     
     // Close the post creation modal
     setShowPostCreation(false);
@@ -127,10 +177,15 @@ const ProfilePage = () => {
 
   // Function to check if a post is saved
   const isSaved = (postId) => {
-    return savedPosts.some(savedItem => 
-      savedItem.postId === postId || 
-      savedItem.postId === String(postId)
-    );
+    if (!savedPosts || !Array.isArray(savedPosts)) {
+      return false;
+    }
+    
+    return savedPosts.some(savedItem => {
+      // Handle both formats: {id: number} and {postId: number/string}
+      const savedId = savedItem.postId || savedItem.id;
+      return savedId === postId || savedId === String(postId);
+    });
   };
 
   const handleViewSavedPosts = () => {
@@ -138,12 +193,14 @@ const ProfilePage = () => {
   };
 
   // Handle saving and unsaving posts with animation feedback
-  const handleSaveProfileCourse = (course) => {
+  const handleSaveProfileCourse = (post) => {
+    console.log("Saving/unsaving post:", post);
+    
     // Call API to save/unsave
-    savePost(course);
+    savePost(post);
     
     // Show animation feedback
-    const saveButtonElement = document.querySelector(`[data-course-id="${course.id}"]`);
+    const saveButtonElement = document.querySelector(`[data-course-id="${post.id}"]`);
     if (saveButtonElement) {
       saveButtonElement.classList.add('save-animation');
       setTimeout(() => {
@@ -162,28 +219,59 @@ const ProfilePage = () => {
     setShowProfileSettings(false);
   };
 
+  const toggleMobileMenu = () => {
+    setMobileMenuOpen(!mobileMenuOpen);
+  };
+
   // Get all content that should be displayed based on active tab
   const getFilteredContent = () => {
+    console.log("ProfilePage: Filtering content for tab:", activeTab);
+    console.log("ProfilePage: Available posts:", localPosts);
+    console.log("ProfilePage: Saved posts:", savedPosts);
+    console.log("ProfilePage: Current user:", currentUser);
+    
+    // Important to prevent undefined access errors
+    const postsToFilter = Array.isArray(localPosts) ? localPosts : [];
+    const demoPostsToUse = Array.isArray(demoPosts) ? demoPosts : [];
+    
+    // Debug log post structure
+    if (postsToFilter.length > 0) {
+      console.log("ProfilePage: Sample post structure:", postsToFilter[0]);
+    }
+    
     if (activeTab === 'saved') {
       // Filter posts that are saved
-      return [...localPosts, ...demoPosts].filter(post => isSaved(post.id));
+      const savedContent = [...postsToFilter, ...demoPostsToUse].filter(post => {
+        const isSavedResult = isSaved(post.id);
+        console.log(`Post ${post.id} is saved: ${isSavedResult}`);
+        return isSavedResult;
+      });
+      console.log("ProfilePage: Saved content:", savedContent);
+      return savedContent;
     } else if (activeTab === 'created') {
       // Filter posts created by the current user
-      return localPosts.filter(post => 
-        post.authorId === currentUser?.uid || 
-        post.author === currentUser?.displayName || 
-        post.author === currentUser?.email
-      );
+      const userContent = postsToFilter.filter(post => {
+        const isUserPostResult = isUserPost(post);
+        console.log(`Post ${post.id} is user post: ${isUserPostResult}`);
+        return isUserPostResult;
+      });
+      console.log("ProfilePage: User content:", userContent);
+      return userContent;
     } else if (activeTab === 'demo') {
       // Show only demo posts
-      return demoPosts;
+      console.log("ProfilePage: Demo content:", demoPostsToUse);
+      return demoPostsToUse;
     } else {
-      // For recommended/All tab, show all posts including user posts and demos
-      return [...localPosts, ...demoPosts];
+      // For recommended tab, show all posts including user posts and demos
+      const allContent = [...postsToFilter, ...demoPostsToUse];
+      console.log("ProfilePage: All content:", allContent);
+      return allContent;
     }
   };
   
+  // Get filtered content for the current tab
   const filteredContent = getFilteredContent();
+  console.log(`ProfilePage Render: Tab "${activeTab}" has ${filteredContent.length} items to display:`, filteredContent);
 
   // Function to format post content
   const formatPostContent = (content) => {
@@ -205,12 +293,42 @@ const ProfilePage = () => {
             <span className="profile-logo-dot">●</span>
             EtherealMind
           </div>
+          
+          {/* Hamburger menu for mobile */}
+          <div className="hamburger-menu" onClick={toggleMobileMenu}>
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+          
+          {/* Desktop navigation */}
           <div className="profile-nav-center">
             <Link to="/" className="profile-nav-link active">Home</Link>
             <Link to="/explore" className="profile-nav-link">Explore</Link>
             <a href="#" className="profile-nav-link">Notifications</a>
             <a href="#" className="profile-nav-link">Messages</a>
           </div>
+          
+          {/* Mobile navigation menu */}
+          <div className={`mobile-menu ${mobileMenuOpen ? 'open' : ''}`}>
+            <div className="mobile-menu-header">
+              <div className="mobile-user-info">
+                <div className="mobile-avatar">{userName.charAt(0).toUpperCase()}</div>
+                <span className="mobile-username">{userName}</span>
+              </div>
+              <button className="mobile-menu-close" onClick={toggleMobileMenu}>×</button>
+            </div>
+            <div className="mobile-menu-items">
+              <Link to="/" className="mobile-menu-item">Home</Link>
+              <Link to="/explore" className="mobile-menu-item">Explore</Link>
+              <a href="#" className="mobile-menu-item">Notifications</a>
+              <a href="#" className="mobile-menu-item">Messages</a>
+              <div className="mobile-menu-divider"></div>
+              <a href="#" className="mobile-menu-item" onClick={handleEditProfile}>Edit Profile</a>
+              <button className="mobile-menu-item logout" onClick={handleLogout}>Logout</button>
+            </div>
+          </div>
+          
           <div className="profile-nav-right">
             <button className="profile-signup-btn" onClick={handleLogout}>
               Logout
@@ -248,131 +366,145 @@ const ProfilePage = () => {
             </div>
             <a href="#" className="profile-footer-link">Privacy Policy</a>
             <a href="#" className="profile-footer-link">Terms of Service</a>
-            <p className="profile-copyright">© 2023 EtherealMind</p>
           </div>
         </div>
       </header>
       
-      {/* User stats section */}
-      <div className="user-stats">
-        <div className="stat-item">
-          <div className="stat-value">27</div>
-          <div className="stat-label">Following</div>
-        </div>
-        <div className="stat-item">
-          <div className="stat-value">134</div>
-          <div className="stat-label">Followers</div>
-        </div>
-        <div className="stat-item">
-          <div className="stat-value">{userPostCount}</div>
-          <div className="stat-label">Posts</div>
+      {/* User stats */}
+      <div className="profile-content">
+        <div className="profile-content-container">
+          <div className="user-stats">
+            <div className="stat-item">
+              <div className="stat-value">{userPostCount}</div>
+              <div className="stat-label">posts</div>
+            </div>
+            <div className="stat-item">
+              <div className="stat-value">542</div>
+              <div className="stat-label">followers</div>
+            </div>
+            <div className="stat-item">
+              <div className="stat-value">267</div>
+              <div className="stat-label">following</div>
+            </div>
+            <div className="stat-item">
+              <div className="stat-value">{savedPosts?.length || 0}</div>
+              <div className="stat-label">saved</div>
+            </div>
+          </div>
         </div>
       </div>
       
+      {/* Tab header showing which content is currently displayed */}
+      <div className="profile-section-title">
+        <h2>
+          {activeTab === 'recommended' && 'Recommended Content'}
+          {activeTab === 'saved' && 'Saved Content'}
+          {activeTab === 'created' && 'Your Posts'}
+          {activeTab === 'demo' && 'Demo Content'}
+        </h2>
+        <p>
+          {activeTab === 'recommended' && 'Content tailored for you'}
+          {activeTab === 'saved' && 'Content you\'ve saved for later'}
+          {activeTab === 'created' && 'Posts you\'ve shared with the community'}
+          {activeTab === 'demo' && 'Example posts to demonstrate the platform features'}
+        </p>
+      </div>
+      
       {/* Tabs */}
-      <section className="profile-tabs">
+      <div className="profile-tabs">
         <div className="profile-tabs-container">
           {tabOptions.map(tab => (
-            <button 
+            <button
               key={tab.id}
               className={`profile-tab ${activeTab === tab.id ? 'active' : ''}`}
-              onClick={() => tab.id === 'saved' ? handleViewSavedPosts() : handleTabChange(tab.id)}
+              onClick={() => handleTabChange(tab.id)}
             >
               {tab.label}
               {tab.count > 0 && (
-                <span className="profile-tab-count">{tab.count}</span>
+                <span className={`profile-tab-count ${activeTab === tab.id ? 'active' : ''}`}>
+                  {tab.count}
+                </span>
               )}
             </button>
           ))}
         </div>
-      </section>
+      </div>
       
       {/* Content */}
       <div className="profile-content">
-        {activeTab === 'demo' && (
-          <div className="profile-section-title">
-            <h2>Demo Content</h2>
-            <p>Example posts to demonstrate the platform features</p>
-          </div>
-        )}
-        
         <div className="profile-content-container">
-          {filteredContent.length > 0 ? (
-            filteredContent.map(post => (
-              <div className={`profile-course-card ${post.isDemo ? 'demo-post' : ''}`} key={post.id}>
-                <div className="profile-course-info">
-                  <span className="profile-course-category">{post.category}</span>
-                  {post.isDemo && <span className="demo-tag">Demo</span>}
-                  <h2 className="profile-course-title">{post.title}</h2>
-                  <p className="profile-course-description">
-                    {formatPostContent(post.description || post.content)}
-                  </p>
-                  <button className="profile-course-action">View Details</button>
-                </div>
-                <div className="profile-course-image">
-                  <img 
-                    src={post.image || post.imageUrl || "https://images.unsplash.com/photo-1519834584171-e03a7fefd0a7?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60"} 
-                    alt={post.title} 
-                  />
-                  <button 
-                    className={`profile-save-button ${isSaved(post.id) ? 'saved' : ''}`} 
-                    onClick={() => handleSaveProfileCourse(post)}
-                    data-course-id={post.id}
-                  >
-                    {isSaved(post.id) ? '★' : '☆'}
-                  </button>
-                </div>
-              </div>
-            ))
-          ) : (
+          {filteredContent && filteredContent.length === 0 ? (
             <div className="no-content-message">
-              {activeTab === 'saved' ? (
-                <div>
-                  <h3>No saved items yet</h3>
-                  <p>Your saved courses and posts will appear here.</p>
-                  <button 
-                    className="browse-explore-button"
-                    onClick={() => navigate('/explore')}
-                  >
-                    Browse Explore Page
-                  </button>
-                </div>
-              ) : activeTab === 'created' ? (
-                <div>
-                  <h3>You haven't created any posts yet</h3>
-                  <p>Share your thoughts with the community by creating a post.</p>
-                  <button 
-                    className="browse-explore-button create-post-button"
-                    onClick={handleCreatePost}
-                  >
-                    Create Your First Post
-                  </button>
-                </div>
+              <h3>No content to display</h3>
+              <p>
+                {activeTab === 'saved' 
+                  ? "You haven't saved any posts yet." 
+                  : activeTab === 'created'
+                    ? "You haven't created any posts yet." 
+                    : "There are no posts to display."}
+              </p>
+              {activeTab === 'created' ? (
+                <button className="browse-explore-button" onClick={handleCreatePost}>
+                  Create Your First Post
+                </button>
               ) : (
-                <div>
-                  <h3>No content available</h3>
-                  <p>Check back later for more content.</p>
-                </div>
+                <button className="browse-explore-button" onClick={handleExploreClick}>
+                  Browse Explore Page
+                </button>
               )}
+            </div>
+          ) : (
+            <>
+              {/* Debug post count display */}
+              <p className="post-count-debug">
+                Displaying {filteredContent.length} posts for "{activeTab}" tab
+              </p>
+              
+              {/* Posts list */}
+              {filteredContent.map(post => (
+                <div key={post.id} className={`profile-course-card ${post.isDemo ? 'demo-post' : ''}`}>
+                  <div className="profile-course-image">
+                    <img 
+                      src={post.image || post.imageUrl} 
+                      alt={post.title}
+                      onError={(e) => {
+                        e.target.onerror = null;
+                        e.target.src = "https://images.unsplash.com/photo-1516321318423-f06f85e504b3?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60";
+                      }}
+                    />
+                    <button 
+                      className={`profile-save-button ${isSaved(post.id) ? 'saved' : ''}`}
+                      onClick={() => handleSaveProfileCourse(post)}
+                      data-course-id={post.id}
+                    >
+                      {isSaved(post.id) ? '★' : '☆'}
+                    </button>
+                  </div>
+                  <div className="profile-course-info">
+                    <div>
+                      <span className="profile-course-category">{post.category || 'General'}</span>
+                      {post.isDemo && <span className="demo-tag">Demo</span>}
+                      {isUserPost(post) && <span className="user-post-tag">Your Post</span>}
+                    </div>
+                    <h3 className="profile-course-title">{post.title}</h3>
+                    <p className="profile-course-description">
+                      {post.description || formatPostContent(post.content)}
+                    </p>
+                    <button className="profile-course-action">View Details</button>
+                  </div>
+                </div>
+              ))}
+            </>
+          )}
+          
+          {filteredContent && filteredContent.length > 0 && (
+            <div className="profile-load-more">
+              <button className="profile-load-more-btn">Load More</button>
             </div>
           )}
         </div>
-        
-        {/* Load More Button */}
-        {filteredContent.length > 0 && (
-          <div className="profile-load-more">
-            <button className="profile-load-more-btn">Load More</button>
-          </div>
-        )}
       </div>
-
-      {/* Toast notification */}
-      {toast && toast.show && (
-        <div className={`profile-toast-notification ${toast.type}`}>
-          <p>{toast.message}</p>
-        </div>
-      )}
-
+      
       {/* Post Creation Modal */}
       {showPostCreation && (
         <PostCreationPage 
@@ -383,15 +515,20 @@ const ProfilePage = () => {
       
       {/* Explore Page Modal */}
       {showExplore && (
-        <ExplorePage onClose={handleCloseExplore} />
-      )}
-
-      {/* Profile Settings Modal */}
-      {showProfileSettings && (
-        <UserProfileSettings 
-          onClose={handleCloseProfileSettings} 
+        <ExplorePage
+          onClose={handleCloseExplore}
         />
       )}
+      
+      {/* Profile Settings Modal */}
+      {showProfileSettings && (
+        <UserProfileSettings
+          onClose={handleCloseProfileSettings}
+        />
+      )}
+
+      {/* Overlay for mobile menu */}
+      {mobileMenuOpen && <div className="mobile-menu-overlay" onClick={toggleMobileMenu}></div>}
     </div>
   );
 };

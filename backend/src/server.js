@@ -46,41 +46,23 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Posts endpoint
+// Posts endpoint - use the database module
 app.get('/api/saved-posts', (req, res) => {
   try {
-    // Try to load mock data from file if available
-    const mockDataPath = path.join(__dirname, '../api/saved-posts.js');
+    // Import the database module
+    const db = require('./db');
     
-    if (fs.existsSync(mockDataPath)) {
-      // If file exists, extract the mockPosts data
-      const content = fs.readFileSync(mockDataPath, 'utf8');
-      const mockPostsMatch = content.match(/const\s+mockPosts\s*=\s*(\[[\s\S]*?\]);/);
-      
-      if (mockPostsMatch && mockPostsMatch[1]) {
-        try {
-          // Use eval for simplicity (in production, a JSON file would be better)
-          // eslint-disable-next-line no-eval
-          const mockPosts = eval(mockPostsMatch[1]);
-          
-          return res.status(200).json({
-            status: 'success',
-            message: 'Posts retrieved successfully',
-            data: mockPosts,
-            timestamp: new Date().toISOString(),
-            origin: req.headers['host'] || 'unknown'
-          });
-        } catch (evalError) {
-          console.error('Error evaluating mock posts:', evalError);
-        }
-      }
-    }
+    // Get posts from the database
+    const posts = db.getPosts();
     
-    // Fallback to empty array if file doesn't exist or can't be parsed
+    // Update view stats
+    db.updateStats({ totalViews: db.getStats().totalViews + 1 });
+    
     res.status(200).json({
       status: 'success',
-      message: 'No posts found',
-      data: [],
+      message: 'Posts retrieved successfully',
+      data: posts,
+      count: posts.length,
       timestamp: new Date().toISOString(),
       origin: req.headers['host'] || 'unknown'
     });
@@ -89,6 +71,68 @@ app.get('/api/saved-posts', (req, res) => {
     res.status(500).json({
       status: 'error',
       message: 'Failed to retrieve posts',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// Add a new post endpoint
+app.post('/api/saved-posts', (req, res) => {
+  try {
+    const db = require('./db');
+    
+    // Get post data from request body
+    const postData = req.body;
+    
+    // Validate post data
+    if (!postData || !postData.title || !postData.content) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Invalid post data. Title and content are required.',
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    // Add the post to the database
+    const newPost = db.addPost(postData);
+    
+    res.status(201).json({
+      status: 'success',
+      message: 'Post created successfully',
+      data: newPost,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Error creating post:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to create post',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// Stats endpoint
+app.get('/api/stats', (req, res) => {
+  try {
+    const db = require('./db');
+    
+    // Get stats from the database
+    const stats = db.getStats();
+    
+    res.status(200).json({
+      status: 'success',
+      message: 'Stats retrieved successfully',
+      data: stats,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Error retrieving stats:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to retrieve stats',
       error: error.message,
       timestamp: new Date().toISOString()
     });
