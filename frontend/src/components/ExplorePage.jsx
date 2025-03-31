@@ -177,29 +177,28 @@ With consistent practice, mindfulness can become less of a formal exercise and m
   };
 
   // Handle saving and unsaving posts with animation feedback
-  const handleSavePost = (post) => {
-    // Get the element before saving to animate it
-    const postIsSaved = isSaved(post.id);
-    
-    // Call API to save/unsave
-    savePost(post);
-    
-    // Show animation feedback
-    const saveButtonElement = document.querySelector(`[data-post-id="${post.id}"]`);
-    if (saveButtonElement) {
-      saveButtonElement.classList.add('save-animation');
-      setTimeout(() => {
-        saveButtonElement.classList.remove('save-animation');
-      }, 500);
+  const handleSavePost = async (post) => {
+    try {
+      // Get the element before saving to animate it
+      const postIsSaved = isPostSaved(post.id);
+      console.log(`Attempting to ${postIsSaved ? 'unsave' : 'save'} post:`, post.id);
+      
+      // Call API to save/unsave
+      await savePost(post);
+      
+      // Show animation feedback
+      const saveButtonElement = document.querySelector(`[data-post-id="${post.id}"]`);
+      if (saveButtonElement) {
+        saveButtonElement.classList.add('save-animation');
+        setTimeout(() => {
+          saveButtonElement.classList.remove('save-animation');
+        }, 500);
+      }
+    } catch (error) {
+      console.error('Error in handleSavePost:', error);
+      // Show error alert
+      alert(`Failed to ${isPostSaved(post.id) ? 'remove' : 'save'} post. Please try again.`);
     }
-  };
-
-  // Function to check if a post is saved
-  const isSaved = (postId) => {
-    return savedPosts.some(savedItem => 
-      savedItem.postId === postId || 
-      savedItem.postId === String(postId)
-    );
   };
   
   // Handle opening post modal
@@ -392,12 +391,12 @@ With consistent practice, mindfulness can become less of a formal exercise and m
                   <div className="post-image">
                     <img src={post.image || post.imageUrl || "https://images.unsplash.com/photo-1519834584171-e03a7fefd0a7?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60"} alt={post.title} />
                     <button 
-                      className={`save-button ${isSaved(post.id) ? 'saved' : ''}`}
+                      className={`save-button ${isPostSaved(post.id) ? 'saved' : ''}`}
                       onClick={() => handleSavePost(post)}
-                      title={isSaved(post.id) ? "Unsave" : "Save"}
+                      title={isPostSaved(post.id) ? "Unsave" : "Save"}
                       data-post-id={post.id}
                     >
-                      {isSaved(post.id) ? '★' : '☆'}
+                      {isPostSaved(post.id) ? '★' : '☆'}
                     </button>
                   </div>
                   <div className="post-details">
@@ -476,10 +475,10 @@ With consistent practice, mindfulness can become less of a formal exercise and m
               
               <div className="post-modal-actions">
                 <button 
-                  className={`post-modal-save ${isSaved(selectedPost.id) ? 'saved' : ''}`}
+                  className={`post-modal-save ${isPostSaved(selectedPost.id) ? 'saved' : ''}`}
                   onClick={() => handleSavePost(selectedPost)}
                 >
-                  {isSaved(selectedPost.id) ? 'Saved ★' : 'Save ☆'}
+                  {isPostSaved(selectedPost.id) ? 'Saved ★' : 'Save ☆'}
                 </button>
               </div>
             </div>

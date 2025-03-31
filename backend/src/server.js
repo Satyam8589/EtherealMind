@@ -40,6 +40,9 @@ app.use((err, req, res, next) => {
 // Serve static files from the public directory
 app.use(express.static(path.join(__dirname, '../public')));
 
+// Serve uploaded files
+app.use('/uploads', express.static(path.join(__dirname, '../data/uploads')));
+
 // Health check endpoint with detailed status
 app.get('/health', (req, res) => {
   const healthData = {
@@ -107,7 +110,7 @@ app.get('/api/saved-posts', (req, res) => {
   }
 });
 
-// Add a new post endpoint
+// Add a new post endpoint with image support
 app.post('/api/saved-posts', (req, res) => {
   try {
     const db = require('./db');
@@ -124,8 +127,13 @@ app.post('/api/saved-posts', (req, res) => {
       });
     }
     
-    // Add the post to the database
+    // Add the post to the database (now handles image upload internally)
     const newPost = db.addPost(postData);
+    
+    // Return the full URL for the image if it exists
+    if (newPost.imageUrl) {
+      newPost.imageUrl = `${req.protocol}://${req.get('host')}/${newPost.imageUrl}`;
+    }
     
     res.status(201).json({
       status: 'success',
@@ -224,26 +232,59 @@ app.get('/api/saved-posts/:userId', async (req, res) => {
     const db = require('./db');
     const userId = req.params.userId;
     
+    console.log(`GET /api/saved-posts/${userId} requested`);
+    
     // Get saved posts from database
     const savedPosts = db.getSavedPosts(userId);
     
-    // Get all posts to get full post data
-    const allPosts = db.getPosts();
+    // If no saved posts found, return empty array
+    if (!savedPosts || savedPosts.length === 0) {
+      console.log(`No saved posts found for user ${userId}`);
+      return res.status(200).json({
+        status: 'success',
+        message: 'No saved posts found',
+        data: [],
+        count: 0,
+        timestamp: new Date().toISOString()
+      });
+    }
     
-    // Combine saved posts with full post data
-    const savedPostsWithData = savedPosts
-      .map(saved => {
-        const fullPost = allPosts.find(post => post.id === saved.postId);
-        if (!fullPost) return null;
+    console.log(`Found ${savedPosts.length} saved posts for user ${userId}`);
+    
+    // Transform the saved posts to include the full post data 
+    // and mark them as saved
+    const savedPostsWithData = savedPosts.map(saved => {
+      // If we already have fullPost data, use it directly
+      if (saved.fullPost) {
         return {
           ...saved,
           post: {
-            ...fullPost,
+            ...saved.fullPost,
             isSaved: true
           }
         };
-      })
-      .filter(item => item !== null); // Remove any saved posts where the original post no longer exists
+      }
+      
+      // Otherwise try to get the post from all posts (legacy support)
+      const allPosts = db.getPosts();
+      const fullPost = allPosts.find(post => String(post.id) === String(saved.postId));
+      
+      return {
+        ...saved,
+        post: fullPost ? { 
+          ...fullPost, 
+          isSaved: true 
+        } : {
+          id: saved.postId,
+          title: saved.title || 'Unknown Title',
+          content: saved.preview || 'No content available',
+          category: saved.category || 'Uncategorized',
+          isSaved: true
+        }
+      };
+    });
+    
+    console.log(`Returning ${savedPostsWithData.length} saved posts with full data`);
     
     res.status(200).json({
       status: 'success',
@@ -270,29 +311,50 @@ app.post('/api/saved-posts/:userId', async (req, res) => {
     const userId = req.params.userId;
     const post = req.body;
     
+    console.log(`POST /api/saved-posts/${userId} requested with data:`, post);
+    
     if (!post || !post.id) {
+      console.log('Invalid post data: post ID is required');
       return res.status(400).json({
         status: 'error',
-        message: 'Invalid post data',
+        message: 'Invalid post data: post ID is required',
         timestamp: new Date().toISOString()
       });
     }
     
+    // Validate required fields
+    if (!post.title) {
+      console.log('Invalid post data: title is required');
+      return res.status(400).json({
+        status: 'error',
+        message: 'Invalid post data: title is required',
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    console.log(`Saving post ${post.id} for user ${userId}`);
     const success = db.savePostForUser(userId, post);
     
     if (success) {
       // Get updated saved posts
       const savedPosts = db.getSavedPosts(userId);
       
+      // Return the newly saved post with full details
+      const savedPost = savedPosts.find(sp => String(sp.postId) === String(post.id));
+      
+      console.log(`Post ${post.id} successfully saved for user ${userId}`);
+      
       res.status(201).json({
         status: 'success',
         message: 'Post saved successfully',
-        data: savedPosts,
+        data: savedPost,
         timestamp: new Date().toISOString()
       });
     } else {
-      res.status(400).json({
-        status: 'error',
+      console.log(`Post ${post.id} is already saved for user ${userId}`);
+      
+      res.status(200).json({
+        status: 'warning',
         message: 'Post is already saved',
         timestamp: new Date().toISOString()
       });
@@ -315,15 +377,21 @@ app.delete('/api/saved-posts/:userId/:postId', (req, res) => {
     const userId = req.params.userId;
     const postId = req.params.postId;
     
+    console.log(`DELETE /api/saved-posts/${userId}/${postId} requested`);
+    
     const success = db.removeSavedPost(userId, postId);
     
     if (success) {
+      console.log(`Post ${postId} successfully removed for user ${userId}`);
+      
       res.status(200).json({
         status: 'success',
         message: 'Post removed from saved items',
         timestamp: new Date().toISOString()
       });
     } else {
+      console.log(`Post ${postId} not found in saved posts for user ${userId}`);
+      
       res.status(404).json({
         status: 'error',
         message: 'Saved post not found',
@@ -335,6 +403,40 @@ app.delete('/api/saved-posts/:userId/:postId', (req, res) => {
     res.status(500).json({
       status: 'error',
       message: 'Failed to remove saved post',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// Upload image endpoint
+app.post('/api/upload-image', (req, res) => {
+  try {
+    const db = require('./db');
+    const imageData = req.body.image;
+    
+    if (!imageData || !imageData.startsWith('data:image')) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Invalid image data',
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    const imagePath = db.saveImage(imageData);
+    const imageUrl = `${req.protocol}://${req.get('host')}/${imagePath}`;
+    
+    res.status(201).json({
+      status: 'success',
+      message: 'Image uploaded successfully',
+      data: { imageUrl },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Error uploading image:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to upload image',
       error: error.message,
       timestamp: new Date().toISOString()
     });

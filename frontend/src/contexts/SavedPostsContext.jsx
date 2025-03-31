@@ -134,12 +134,37 @@ export function SavedPostsProvider({ children }) {
         // Log the post being created
         console.log("Creating new post:", post);
         
+        // Handle image upload if present
+        let imageUrl = post.imageUrl;
+        if (post.image && post.image.startsWith('data:image')) {
+          try {
+            const response = await fetch('/api/upload-image', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({ image: post.image })
+            });
+            
+            if (!response.ok) {
+              throw new Error('Failed to upload image');
+            }
+            
+            const data = await response.json();
+            imageUrl = data.data.imageUrl;
+          } catch (error) {
+            console.error('Error uploading image:', error);
+            showToast('Failed to upload image, but continuing with post creation', 'warning');
+          }
+        }
+        
         // Generate a unique ID if not provided
         const newPost = {
           ...post,
           id: post.id || `post_${Date.now()}`,
           date: post.date || new Date().toISOString().split('T')[0],
-          createdAt: new Date().toISOString()
+          createdAt: new Date().toISOString(),
+          imageUrl: imageUrl
         };
         
         // Get current posts from localStorage for duplicate checking
@@ -220,10 +245,95 @@ export function SavedPostsProvider({ children }) {
 
   // Check if post is saved
   const isPostSaved = (postId) => {
+    if (!savedPosts || savedPosts.length === 0) return false;
     return savedPosts.some(savedItem => 
-      savedItem.postId === postId || 
-      savedItem.postId === String(postId)
+      String(savedItem.postId) === String(postId)
     );
+  };
+
+  // Add function to check server health before operations
+  const checkServerHealth = async () => {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout
+      
+      const response = await fetch('/api/health', { 
+        method: 'GET',
+        cache: 'no-cache',
+        signal: controller.signal,
+        headers: {
+          'Cache-Control': 'no-cache'
+        }
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (response.ok) {
+        return { healthy: true };
+      }
+      return { healthy: false, error: `Server returned ${response.status}` };
+    } catch (error) {
+      console.error('Health check failed:', error);
+      return { healthy: false, error: error.message };
+    }
+  };
+
+  // Save a post locally (when server is unavailable)
+  const savePostLocally = (post, shouldSave = true) => {
+    console.log(`SavedPostsContext: Saving post locally (shouldSave=${shouldSave}):`, post.id);
+    
+    try {
+      // Get current saved state
+      const isAlreadySaved = isPostSaved(post.id);
+      
+      // If trying to save a post that's already saved, or unsave one that's not saved, do nothing
+      if ((shouldSave && isAlreadySaved) || (!shouldSave && !isAlreadySaved)) {
+        console.log(`SavedPostsContext: Post ${post.id} is already in desired state (saved=${isAlreadySaved})`);
+        return;
+      }
+      
+      let updatedSavedPosts;
+      
+      if (shouldSave) {
+        // Add to saved posts
+        const newSavedItem = {
+          postId: post.id,
+          title: post.title || 'Untitled Post',
+          category: post.category || 'Uncategorized',
+          savedAt: new Date().toISOString(),
+          userId: currentUser?.uid || 'local-user',
+          savedLocally: true,
+          post: {
+            ...post,
+            isSaved: true
+          }
+        };
+        updatedSavedPosts = [...savedPosts, newSavedItem];
+        console.log(`SavedPostsContext: Added post ${post.id} to local saved posts`);
+      } else {
+        // Remove from saved posts
+        updatedSavedPosts = savedPosts.filter(item => String(item.postId) !== String(post.id));
+        console.log(`SavedPostsContext: Removed post ${post.id} from local saved posts`);
+      }
+      
+      // Update state and localStorage
+      setSavedPosts(updatedSavedPosts);
+      localStorage.setItem('savedPosts', JSON.stringify(updatedSavedPosts));
+      
+      // Show feedback
+      showToast(
+        shouldSave 
+          ? "Post saved locally (offline mode)" 
+          : "Post removed from saved items (offline mode)", 
+        shouldSave ? "success" : "info"
+      );
+      
+      return true;
+    } catch (error) {
+      console.error('Error saving post locally:', error);
+      showToast("Failed to update saved posts locally", "error");
+      return false;
+    }
   };
 
   // Save a post or remove it if already saved
@@ -231,75 +341,158 @@ export function SavedPostsProvider({ children }) {
     if (!post || !post.id) {
       console.error("SavedPostsContext: Invalid post data:", post);
       showToast("Error: Cannot save invalid post", "error");
-      return;
-    }
-
-    if (!currentUser) {
-      showToast("Please login to save posts", "warning");
-      return;
+      return false;
     }
 
     try {
+      setLoading(true);
+      console.log("SavedPostsContext: Attempting to save/unsave post:", post.id);
+      
       // Check if post is already saved
       const isAlreadySaved = isPostSaved(post.id);
+      
+      // If user is not logged in, save locally only
+      if (!currentUser) {
+        console.log("SavedPostsContext: No user logged in, saving locally only");
+        showToast("Saving locally only. Login to sync your saved posts.", "warning");
+        return savePostLocally(post, !isAlreadySaved);
+      }
+      
+      // Check server health first
+      console.log("SavedPostsContext: Checking server health...");
+      const healthStatus = await checkServerHealth();
+      
+      if (!healthStatus.healthy) {
+        console.warn(`SavedPostsContext: Server health check failed: ${healthStatus.error}`);
+        showToast("Server unavailable. Saving locally only.", "warning");
+        return savePostLocally(post, !isAlreadySaved);
+      }
+      
+      console.log("SavedPostsContext: Server is healthy, proceeding with API call");
+      console.log("SavedPostsContext: Post is already saved:", isAlreadySaved);
 
       if (isAlreadySaved) {
         // Remove post from saved posts
+        console.log(`SavedPostsContext: Removing post ${post.id} for user ${currentUser.uid}`);
         try {
+          const token = await currentUser.getIdToken();
+          console.log("SavedPostsContext: Got auth token");
+          
           const response = await fetch(`/api/saved-posts/${currentUser.uid}/${post.id}`, {
             method: 'DELETE',
             headers: {
-              'Authorization': `Bearer ${await currentUser.getIdToken()}`
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
             }
           });
 
+          console.log("SavedPostsContext: Delete response status:", response.status);
+          
           if (!response.ok) {
-            throw new Error('Failed to remove saved post');
+            const errorData = await response.json().catch(() => ({}));
+            console.error("SavedPostsContext: Error response from delete:", errorData);
+            throw new Error(`Failed to remove saved post: ${response.status} ${errorData.message || ''}`);
           }
 
+          // Update local state even if API fails (for better UX)
           const updatedSavedPosts = savedPosts.filter(savedItem => 
-            savedItem.postId !== post.id && String(savedItem.postId) !== String(post.id)
+            String(savedItem.postId) !== String(post.id)
           );
           setSavedPosts(updatedSavedPosts);
+          
+          // Save to localStorage as backup
+          localStorage.setItem('savedPosts', JSON.stringify(updatedSavedPosts));
+          
           showToast("Post removed from saved items", "info");
-        } catch (error) {
-          console.error("Error removing saved post:", error);
-          showToast("Failed to remove saved post", "error");
+          console.log("SavedPostsContext: Post successfully removed from saved items");
+          return true;
+        } catch (deleteError) {
+          console.error("SavedPostsContext: Error in delete operation:", deleteError);
+          // Try local fallback
+          return savePostLocally(post, false);
         }
       } else {
         // Add post to saved posts
+        console.log(`SavedPostsContext: Saving post ${post.id} for user ${currentUser.uid}`);
         try {
+          const token = await currentUser.getIdToken();
+          console.log("SavedPostsContext: Got auth token for save");
+          
+          const postData = {
+            id: post.id,
+            title: post.title || 'Untitled Post',
+            content: post.content || '',
+            category: post.category || 'Uncategorized',
+            imageUrl: post.imageUrl || post.image || '',
+            createdAt: post.createdAt || new Date().toISOString()
+          };
+          
+          console.log("SavedPostsContext: Sending post data:", postData);
+          
           const response = await fetch(`/api/saved-posts/${currentUser.uid}`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${await currentUser.getIdToken()}`
+              'Authorization': `Bearer ${token}`
             },
-            body: JSON.stringify(post)
+            body: JSON.stringify(postData)
           });
 
+          console.log("SavedPostsContext: Save response status:", response.status);
+          
           if (!response.ok) {
-            throw new Error('Failed to save post');
+            const errorData = await response.json().catch(() => ({}));
+            console.error("SavedPostsContext: Error response from save:", errorData);
+            throw new Error(`Failed to save post: ${response.status} ${errorData.message || ''}`);
           }
 
+          // Try to parse response data
+          let data;
+          try {
+            data = await response.json();
+            console.log("SavedPostsContext: Save response data:", data);
+          } catch (parseError) {
+            console.error("SavedPostsContext: Error parsing response:", parseError);
+            data = { status: 'success' };
+          }
+          
+          // Update local state even if API response parsing fails
           const newSavedItem = {
             postId: post.id,
-            title: post.title,
-            category: post.category,
+            title: post.title || 'Untitled Post',
+            category: post.category || 'Uncategorized',
             savedAt: new Date().toISOString(),
-            userId: currentUser.uid
+            userId: currentUser.uid,
+            post: {
+              ...post,
+              isSaved: true
+            }
           };
+          
+          // Update state and localStorage
           const updatedSavedPosts = [...savedPosts, newSavedItem];
           setSavedPosts(updatedSavedPosts);
+          localStorage.setItem('savedPosts', JSON.stringify(updatedSavedPosts));
+          
           showToast("Post saved successfully", "success");
-        } catch (error) {
-          console.error("Error saving post:", error);
-          showToast("Failed to save post", "error");
+          console.log("SavedPostsContext: Post successfully saved");
+          return true;
+        } catch (saveError) {
+          console.error("SavedPostsContext: Error in save operation:", saveError);
+          // Try local fallback
+          return savePostLocally(post, true);
         }
       }
     } catch (error) {
-      console.error("Error in savePost:", error);
-      showToast("An error occurred while saving the post", "error");
+      console.error("SavedPostsContext: Error in savePost:", error);
+      
+      // Show error but keep local state updated for better UX
+      showToast(`${error.message || "Error saving post"}. Using local data.`, "error");
+      
+      // Use optimistic update for better UX
+      return savePostLocally(post, !isPostSaved(post.id));
+    } finally {
+      setLoading(false);
     }
   };
 
