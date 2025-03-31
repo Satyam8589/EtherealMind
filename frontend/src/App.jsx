@@ -190,7 +190,10 @@ function App() {
             method: 'GET',
             headers: {
               'Content-Type': 'application/json',
+              'Accept': 'application/json',
             },
+            mode: 'cors',
+            credentials: 'include',
           });
           
           console.log(`Response status for ${endpoint}: ${response.status}`);
