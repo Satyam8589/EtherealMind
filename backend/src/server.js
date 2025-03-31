@@ -218,6 +218,129 @@ app.get('/api/categories', (req, res) => {
   }
 });
 
+// Get saved posts for a user
+app.get('/api/saved-posts/:userId', async (req, res) => {
+  try {
+    const db = require('./db');
+    const userId = req.params.userId;
+    
+    // Get saved posts from database
+    const savedPosts = db.getSavedPosts(userId);
+    
+    // Get all posts to get full post data
+    const allPosts = db.getPosts();
+    
+    // Combine saved posts with full post data
+    const savedPostsWithData = savedPosts
+      .map(saved => {
+        const fullPost = allPosts.find(post => post.id === saved.postId);
+        if (!fullPost) return null;
+        return {
+          ...saved,
+          post: {
+            ...fullPost,
+            isSaved: true
+          }
+        };
+      })
+      .filter(item => item !== null); // Remove any saved posts where the original post no longer exists
+    
+    res.status(200).json({
+      status: 'success',
+      message: 'Saved posts retrieved successfully',
+      data: savedPostsWithData,
+      count: savedPostsWithData.length,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Error retrieving saved posts:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to retrieve saved posts',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// Save a post for a user
+app.post('/api/saved-posts/:userId', async (req, res) => {
+  try {
+    const db = require('./db');
+    const userId = req.params.userId;
+    const post = req.body;
+    
+    if (!post || !post.id) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Invalid post data',
+        timestamp: new Date().toISOString()
+      });
+    }
+    
+    const success = db.savePostForUser(userId, post);
+    
+    if (success) {
+      // Get updated saved posts
+      const savedPosts = db.getSavedPosts(userId);
+      
+      res.status(201).json({
+        status: 'success',
+        message: 'Post saved successfully',
+        data: savedPosts,
+        timestamp: new Date().toISOString()
+      });
+    } else {
+      res.status(400).json({
+        status: 'error',
+        message: 'Post is already saved',
+        timestamp: new Date().toISOString()
+      });
+    }
+  } catch (error) {
+    console.error('Error saving post:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to save post',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
+// Remove a saved post for a user
+app.delete('/api/saved-posts/:userId/:postId', (req, res) => {
+  try {
+    const db = require('./db');
+    const userId = req.params.userId;
+    const postId = req.params.postId;
+    
+    const success = db.removeSavedPost(userId, postId);
+    
+    if (success) {
+      res.status(200).json({
+        status: 'success',
+        message: 'Post removed from saved items',
+        timestamp: new Date().toISOString()
+      });
+    } else {
+      res.status(404).json({
+        status: 'error',
+        message: 'Saved post not found',
+        timestamp: new Date().toISOString()
+      });
+    }
+  } catch (error) {
+    console.error('Error removing saved post:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to remove saved post',
+      error: error.message,
+      timestamp: new Date().toISOString()
+    });
+  }
+});
+
 // Catch all route - serve index.html
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, '../public/index.html'));

@@ -156,6 +156,76 @@ function deletePost(postId) {
   }
 }
 
+// Get saved posts for a user
+function getSavedPosts(userId) {
+  try {
+    const savedPostsPath = path.join(DB_DIR, `saved_posts_${userId}.json`);
+    if (fs.existsSync(savedPostsPath)) {
+      const data = fs.readFileSync(savedPostsPath, 'utf8');
+      const savedPosts = JSON.parse(data);
+      
+      // Sort by most recently saved
+      return savedPosts.sort((a, b) => 
+        new Date(b.savedAt) - new Date(a.savedAt)
+      );
+    }
+    return [];
+  } catch (err) {
+    console.error('Error reading saved posts:', err);
+    return [];
+  }
+}
+
+// Save a post for a user
+function savePostForUser(userId, post) {
+  try {
+    const savedPostsPath = path.join(DB_DIR, `saved_posts_${userId}.json`);
+    let savedPosts = getSavedPosts(userId);
+    
+    // Check if post is already saved
+    const existingIndex = savedPosts.findIndex(saved => saved.postId === post.id);
+    
+    if (existingIndex === -1) {
+      // Add new saved post
+      const savedPost = {
+        postId: post.id,
+        title: post.title,
+        category: post.category,
+        savedAt: new Date().toISOString(),
+        userId: userId,
+        preview: post.content?.substring(0, 150) + '...' // Add a preview of the content
+      };
+      
+      savedPosts.unshift(savedPost); // Add to beginning of array
+      fs.writeFileSync(savedPostsPath, JSON.stringify(savedPosts, null, 2));
+      return true;
+    }
+    return false;
+  } catch (err) {
+    console.error('Error saving post for user:', err);
+    return false;
+  }
+}
+
+// Remove a saved post for a user
+function removeSavedPost(userId, postId) {
+  try {
+    const savedPostsPath = path.join(DB_DIR, `saved_posts_${userId}.json`);
+    const savedPosts = getSavedPosts(userId);
+    
+    const updatedPosts = savedPosts.filter(saved => saved.postId !== postId);
+    
+    if (updatedPosts.length < savedPosts.length) {
+      fs.writeFileSync(savedPostsPath, JSON.stringify(updatedPosts, null, 2));
+      return true;
+    }
+    return false;
+  } catch (err) {
+    console.error('Error removing saved post:', err);
+    return false;
+  }
+}
+
 // Initialize database when module is loaded
 initDB();
 
@@ -165,5 +235,8 @@ module.exports = {
   getStats,
   addPost,
   updateStats,
-  deletePost
+  deletePost,
+  getSavedPosts,
+  savePostForUser,
+  removeSavedPost
 }; 

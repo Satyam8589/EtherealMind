@@ -16,66 +16,79 @@ export function SavedPostsProvider({ children }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  // Initialize posts from localStorage
+  // Fetch saved posts when user logs in
   useEffect(() => {
-    try {
-      // Load saved posts
-      const savedPostsJson = localStorage.getItem('savedPosts');
-      if (savedPostsJson) {
-        setSavedPosts(JSON.parse(savedPostsJson));
-        console.log("Loaded saved posts from localStorage");
-      }
-      
-      // Load all posts
-      const postsJson = localStorage.getItem('posts');
-      if (postsJson) {
-        let loadedPosts = JSON.parse(postsJson);
-        
-        // Clean up duplicate posts
-        loadedPosts = cleanupDuplicatePosts(loadedPosts);
-        
-        setAllPosts(loadedPosts);
-        console.log("Loaded all posts from localStorage:", loadedPosts.length);
-      } else {
-        // Load demo posts if no posts exist
-        const demoPosts = [
-          {
-            id: 101,
-            title: 'Understanding Meditation',
-            content: 'Meditation is a practice where an individual uses a technique – such as mindfulness, or focusing the mind on a particular object, thought, or activity – to train attention and awareness, and achieve a mentally clear and emotionally calm and stable state.',
-            category: 'Meditation',
-            author: 'Mindful Master',
-            date: '2023-04-15',
-            createdAt: new Date().toISOString()
-          },
-          {
-            id: 102,
-            title: 'Dream Analysis Techniques',
-            content: 'Dream analysis is the process of assigning meaning to dreams. Dreams can be analyzed from many perspectives, including psychological, spiritual, and cultural. Some believe dreams reveal unconscious desires and thoughts.',
-            category: 'Dreams',
-            author: 'Sleep Sage',
-            date: '2023-04-20',
-            createdAt: new Date().toISOString()
-          },
-          {
-            id: 103,
-            title: 'Chakra Healing Basics',
-            content: 'Chakra healing is focused on the belief that the body contains seven energy centers, from the base of the spine to the top of the head. When the chakras are open and aligned, energy can flow freely through the body.',
-            category: 'Healing',
-            author: 'Energy Expert',
-            date: '2023-04-25',
-            createdAt: new Date().toISOString()
-          }
-        ];
-        
-        // Save demo posts to localStorage
-        localStorage.setItem('posts', JSON.stringify(demoPosts));
-        setAllPosts(demoPosts);
-        console.log("Created demo posts:", demoPosts.length);
-      }
-    } catch (error) {
-      console.error("Error initializing posts:", error);
+    if (currentUser) {
+      refreshSavedPosts();
+    } else {
+      setSavedPosts([]); // Clear saved posts when user logs out
     }
+  }, [currentUser]);
+
+  // Initialize posts from backend and localStorage
+  useEffect(() => {
+    const initializePosts = async () => {
+      try {
+        // Try to fetch posts from backend first
+        const response = await fetch('/api/saved-posts');
+        if (response.ok) {
+          const data = await response.json();
+          const posts = data.data || [];
+          setAllPosts(posts);
+          localStorage.setItem('posts', JSON.stringify(posts));
+          return;
+        }
+      } catch (error) {
+        console.error('Error fetching posts from backend:', error);
+      }
+
+      // Fallback to localStorage if backend fails
+      try {
+        const postsJson = localStorage.getItem('posts');
+        if (postsJson) {
+          let loadedPosts = JSON.parse(postsJson);
+          loadedPosts = cleanupDuplicatePosts(loadedPosts);
+          setAllPosts(loadedPosts);
+        } else {
+          // Load demo posts if no posts exist
+          const demoPosts = [
+            {
+              id: 101,
+              title: 'Understanding Meditation',
+              content: 'Meditation is a practice where an individual uses a technique – such as mindfulness, or focusing the mind on a particular object, thought, or activity – to train attention and awareness, and achieve a mentally clear and emotionally calm and stable state.',
+              category: 'Meditation',
+              author: 'Mindful Master',
+              date: '2023-04-15',
+              createdAt: new Date().toISOString()
+            },
+            {
+              id: 102,
+              title: 'Dream Analysis Techniques',
+              content: 'Dream analysis is the process of assigning meaning to dreams. Dreams can be analyzed from many perspectives, including psychological, spiritual, and cultural. Some believe dreams reveal unconscious desires and thoughts.',
+              category: 'Dreams',
+              author: 'Sleep Sage',
+              date: '2023-04-20',
+              createdAt: new Date().toISOString()
+            },
+            {
+              id: 103,
+              title: 'Chakra Healing Basics',
+              content: 'Chakra healing is focused on the belief that the body contains seven energy centers, from the base of the spine to the top of the head. When the chakras are open and aligned, energy can flow freely through the body.',
+              category: 'Healing',
+              author: 'Energy Expert',
+              date: '2023-04-25',
+              createdAt: new Date().toISOString()
+            }
+          ];
+          setAllPosts(demoPosts);
+          localStorage.setItem('posts', JSON.stringify(demoPosts));
+        }
+      } catch (error) {
+        console.error('Error initializing posts:', error);
+      }
+    };
+
+    initializePosts();
   }, []);
 
   // Function to clean up duplicate posts
@@ -214,7 +227,7 @@ export function SavedPostsProvider({ children }) {
   };
 
   // Save a post or remove it if already saved
-  const savePost = (post) => {
+  const savePost = async (post) => {
     if (!post || !post.id) {
       console.error("SavedPostsContext: Invalid post data:", post);
       showToast("Error: Cannot save invalid post", "error");
@@ -232,37 +245,65 @@ export function SavedPostsProvider({ children }) {
 
       if (isAlreadySaved) {
         // Remove post from saved posts
-        const updatedSavedPosts = savedPosts.filter(savedItem => 
-          savedItem.postId !== post.id && String(savedItem.postId) !== String(post.id)
-        );
-        setSavedPosts(updatedSavedPosts);
-        showToast("Post removed from saved items", "info");
-        
-        // Also update localStorage
-        localStorage.setItem('savedPosts', JSON.stringify(updatedSavedPosts));
+        try {
+          const response = await fetch(`/api/saved-posts/${currentUser.uid}/${post.id}`, {
+            method: 'DELETE',
+            headers: {
+              'Authorization': `Bearer ${await currentUser.getIdToken()}`
+            }
+          });
+
+          if (!response.ok) {
+            throw new Error('Failed to remove saved post');
+          }
+
+          const updatedSavedPosts = savedPosts.filter(savedItem => 
+            savedItem.postId !== post.id && String(savedItem.postId) !== String(post.id)
+          );
+          setSavedPosts(updatedSavedPosts);
+          showToast("Post removed from saved items", "info");
+        } catch (error) {
+          console.error("Error removing saved post:", error);
+          showToast("Failed to remove saved post", "error");
+        }
       } else {
         // Add post to saved posts
-        const newSavedItem = {
-          postId: post.id,
-          title: post.title,
-          category: post.category,
-          savedAt: new Date().toISOString(),
-          userId: currentUser.uid
-        };
-        const updatedSavedPosts = [...savedPosts, newSavedItem];
-        setSavedPosts(updatedSavedPosts);
-        showToast("Post saved successfully", "success");
-        
-        // Also update localStorage
-        localStorage.setItem('savedPosts', JSON.stringify(updatedSavedPosts));
+        try {
+          const response = await fetch(`/api/saved-posts/${currentUser.uid}`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${await currentUser.getIdToken()}`
+            },
+            body: JSON.stringify(post)
+          });
+
+          if (!response.ok) {
+            throw new Error('Failed to save post');
+          }
+
+          const newSavedItem = {
+            postId: post.id,
+            title: post.title,
+            category: post.category,
+            savedAt: new Date().toISOString(),
+            userId: currentUser.uid
+          };
+          const updatedSavedPosts = [...savedPosts, newSavedItem];
+          setSavedPosts(updatedSavedPosts);
+          showToast("Post saved successfully", "success");
+        } catch (error) {
+          console.error("Error saving post:", error);
+          showToast("Failed to save post", "error");
+        }
       }
     } catch (error) {
-      console.error("Error saving post:", error);
-      showToast("Failed to save post", "error");
+      console.error("Error in savePost:", error);
+      showToast("An error occurred while saving the post", "error");
     }
   };
 
-  // Refresh saved posts from the backend - now with better error handling
+  // Refresh saved posts from the backend
   const refreshSavedPosts = async () => {
     if (!currentUser) return;
     
@@ -270,35 +311,19 @@ export function SavedPostsProvider({ children }) {
     setError(null);
     
     try {
-      // Try to fetch from backend using environment variable (use 127.0.0.1 instead of localhost)
-      const apiUrl = (import.meta.env.VITE_API_URL || 'http://127.0.0.1:8080/api').replace('localhost', '127.0.0.1');
-      
-      console.log(`SavedPostsContext: Refreshing saved posts from ${apiUrl}/saved-posts`);
-      
-      // Add timeout to avoid long waits
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
-      
-      const response = await fetch(`${apiUrl}/saved-posts?userId=${currentUser.uid}`, {
-        signal: controller.signal,
+      const response = await fetch(`/api/saved-posts/${currentUser.uid}`, {
         headers: {
-          'Cache-Control': 'no-cache',
           'Authorization': `Bearer ${await currentUser.getIdToken()}`
         }
       });
-      
-      clearTimeout(timeoutId);
       
       if (!response.ok) {
         throw new Error(`API returned status: ${response.status}`);
       }
       
       const data = await response.json();
-      setSavedPosts(data.posts || []);
-      console.log('SavedPostsContext: Refreshed saved posts from API', data.posts);
-      
-      // Save to localStorage as backup
-      localStorage.setItem('savedPosts', JSON.stringify(data.posts || []));
+      setSavedPosts(data.data || []);
+      console.log('SavedPostsContext: Refreshed saved posts from API', data.data);
       
       showToast('Posts refreshed from server', 'success');
     } catch (error) {
