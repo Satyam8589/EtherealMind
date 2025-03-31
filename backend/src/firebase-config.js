@@ -124,7 +124,6 @@ try {
     stack: isProduction ? null : error.stack
   };
   
-  // Export dummy objects that can be replaced with in-memory DB
   module.exports = {
     admin: null,
     db: null,

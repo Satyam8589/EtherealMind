@@ -1,4 +1,12 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
+import { 
+  createUserWithEmailAndPassword, 
+  signInWithEmailAndPassword,
+  updateProfile,
+  signOut
+} from 'firebase/auth';
+import { doc, setDoc, getDoc } from 'firebase/firestore';
+import { auth, db } from '../firebase';
 
 // Create context
 const AuthContext = createContext();
@@ -14,30 +22,15 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  // Load user from localStorage on initial mount
+  // Listen for auth state changes
   useEffect(() => {
-    const loadUserFromLocalStorage = () => {
-      try {
-        console.log("Checking for user in localStorage...");
-        const savedUser = localStorage.getItem('currentUser');
-        
-        if (savedUser) {
-          const parsedUser = JSON.parse(savedUser);
-          console.log("User found in localStorage:", parsedUser.email);
-          setCurrentUser(parsedUser);
-        } else {
-          console.log("No user found in localStorage");
-        }
-      } catch (err) {
-        console.error("Error loading user from localStorage:", err);
-        setError("Failed to restore your session. Please login again.");
-      } finally {
-        // Always set loading to false after attempting to load the user
-        setLoading(false);
-      }
-    };
+    const unsubscribe = auth.onAuthStateChanged(user => {
+      console.log("Auth state changed:", user ? user.email : "No user");
+      setCurrentUser(user);
+      setLoading(false);
+    });
 
-    loadUserFromLocalStorage();
+    return unsubscribe;
   }, []);
 
   // Sign up function
@@ -48,15 +41,21 @@ export function AuthProvider({ children }) {
     try {
       console.log(`Signing up user: ${email}`);
       
-      // Generate a unique ID for the user
-      const uid = generateUniqueId();
+      // Create user in Firebase Auth
+      const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+      const user = userCredential.user;
       
-      // Create full user object with password
-      const newUser = {
-        uid,
-        email,
-        password, // In a real app, this would be hashed
+      // Update profile with display name
+      await updateProfile(user, {
+        displayName: displayName || email.split('@')[0]
+      });
+      
+      // Add additional user data to Firestore
+      await setDoc(doc(db, "users", user.uid), {
+        uid: user.uid,
+        email: email,
         displayName: displayName || email.split('@')[0],
+        role: "user",
         createdAt: new Date().toISOString(),
         profileLinks: {
           website: '',
@@ -64,36 +63,9 @@ export function AuthProvider({ children }) {
           instagram: ''
         },
         bio: ''
-      };
+      });
       
-      // Get existing users or initialize empty object
-      const savedUserData = localStorage.getItem('users') ? 
-        JSON.parse(localStorage.getItem('users')) : {};
-      
-      // Check if user already exists
-      if (savedUserData[email]) {
-        throw { code: 'auth/email-already-in-use', message: 'Email already in use' };
-      }
-      
-      // Add user to users object
-      savedUserData[email] = newUser;
-      
-      // Save updated users to localStorage
-      localStorage.setItem('users', JSON.stringify(savedUserData));
-      
-      // Create user object without password for current session
-      const user = {
-        uid,
-        email,
-        displayName: newUser.displayName,
-        createdAt: newUser.createdAt
-      };
-      
-      // Save to localStorage for session
-      localStorage.setItem('currentUser', JSON.stringify(user));
-      setCurrentUser(user);
-      
-      console.log("User signed up successfully:", user);
+      console.log("User signed up successfully:", user.email);
       return user;
     } catch (error) {
       console.error("Signup error:", error);
@@ -112,69 +84,36 @@ export function AuthProvider({ children }) {
     try {
       console.log(`Attempting to log in user: ${email}`);
       
-      // Always create demo user if it doesn't exist
-      ensureDefaultUsers();
-      
-      // For demo purposes, allow login with any credentials
-      // This ensures everyone can login regardless of localStorage issues
-      if (email === 'demo@example.com' && password === 'password123') {
-        // Use the demo user
-        const demoUser = {
-          uid: 'demo-user-1',
-          email: 'demo@example.com',
-          displayName: 'Demo User',
-          createdAt: new Date().toISOString()
-        };
-        
-        // Save to localStorage for session
-        localStorage.setItem('currentUser', JSON.stringify(demoUser));
-        setCurrentUser(demoUser);
-        
-        console.log("Demo user logged in successfully");
-        return demoUser;
+      // Input validation
+      if (!email || !password) {
+        throw new Error('Please enter both email and password');
       }
       
-      // Check if users data exists in localStorage
-      if (!localStorage.getItem('users')) {
-        console.error("No users found in localStorage");
-        throw { code: 'auth/user-not-found', message: 'No user found with this email' };
+      // Normal login flow
+      const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      
+      if (!userCredential || !userCredential.user) {
+        throw new Error('Login failed - no user returned');
       }
       
-      // Get stored user data
-      const savedUserData = JSON.parse(localStorage.getItem('users')); 
-      
-      // Debug log all registered users
-      console.log("Available users:", Object.keys(savedUserData));
-      
-      // Check if user exists
-      if (!savedUserData[email]) {
-        console.error(`User with email ${email} not found`);
-        throw { code: 'auth/user-not-found', message: 'No user found with this email' };
+      // Get additional user data from Firestore
+      try {
+        const userDoc = await getDoc(doc(db, "users", userCredential.user.uid));
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          // Merge Firebase Auth user with Firestore data
+          userCredential.user.userData = userData;
+        }
+      } catch (firestoreError) {
+        console.error("Error fetching user data from Firestore:", firestoreError);
+        // Don't throw here, just log the error
       }
       
-      // Validate password (in a real app, we would use proper password hashing)
-      if (savedUserData[email].password !== password) {
-        console.error(`Incorrect password for user ${email}`);
-        throw { code: 'auth/wrong-password', message: 'Incorrect password' };
-      }
-      
-      // Create user object without the password
-      const user = {
-        uid: savedUserData[email].uid,
-        email,
-        displayName: savedUserData[email].displayName,
-        createdAt: savedUserData[email].createdAt
-      };
-      
-      // Save to localStorage for session
-      localStorage.setItem('currentUser', JSON.stringify(user));
-      setCurrentUser(user);
-      
-      console.log("User logged in successfully:", user);
-      return user;
+      console.log("User logged in successfully:", userCredential.user.email);
+      return userCredential.user;
     } catch (error) {
       console.error("Login error:", error);
-      setError(error.message || "Failed to log in. Please check your credentials.");
+      handleLoginError(error);
       throw error;
     } finally {
       setLoading(false);
@@ -187,11 +126,7 @@ export function AuthProvider({ children }) {
     
     try {
       console.log("Logging out user...");
-      
-      // Clear user from localStorage
-      localStorage.removeItem('currentUser');
-      setCurrentUser(null);
-      
+      await signOut(auth);
       console.log("User logged out successfully");
     } catch (error) {
       console.error("Logout error:", error);
@@ -202,46 +137,43 @@ export function AuthProvider({ children }) {
     }
   };
 
-  // Helper to generate a unique ID
-  const generateUniqueId = () => {
-    return Date.now().toString(36) + Math.random().toString(36).substr(2);
-  };
-
-  // Helper function to ensure default users exist for demo purposes
-  const ensureDefaultUsers = () => {
-    try {
-      // Get existing users or initialize empty object
-      const savedUserData = localStorage.getItem('users') ? 
-        JSON.parse(localStorage.getItem('users')) : {};
-      
-      // Create default users if none exist
-      if (Object.keys(savedUserData).length === 0) {
-        console.log("Creating default users");
-        
-        // Add demo user
-        const demoUser = {
-          uid: 'demo-user-1',
-          email: 'demo@example.com',
-          password: 'password123',
-          displayName: 'Demo User',
-          createdAt: new Date().toISOString(),
-          profileLinks: {
-            website: 'https://example.com',
-            twitter: 'https://twitter.com/demo',
-            instagram: 'https://instagram.com/demo'
-          },
-          bio: 'This is a demo user account'
-        };
-        
-        savedUserData['demo@example.com'] = demoUser;
-        
-        // Save to localStorage
-        localStorage.setItem('users', JSON.stringify(savedUserData));
-        console.log("Default users created");
+  const handleLoginError = (error) => {
+    let errorMessage = "Failed to log in. Please check your credentials.";
+    
+    if (!error || !error.code) {
+      errorMessage = error?.message || "An unexpected error occurred. Please try again.";
+    } else {
+      switch (error.code) {
+        case 'auth/user-not-found':
+          errorMessage = "No account found with this email. Please sign up first.";
+          break;
+        case 'auth/wrong-password':
+          errorMessage = "Incorrect password. Please try again.";
+          break;
+        case 'auth/invalid-credential':
+          errorMessage = "Invalid login credentials. Please check and try again.";
+          break;
+        case 'auth/too-many-requests':
+          errorMessage = "Too many failed login attempts. Please try again later or reset your password.";
+          break;
+        case 'auth/user-disabled':
+          errorMessage = "This account has been disabled. Please contact support.";
+          break;
+        case 'auth/invalid-email':
+          errorMessage = "Invalid email format. Please check and try again.";
+          break;
+        case 'auth/operation-not-allowed':
+          errorMessage = "Email/password accounts are not enabled. Please contact support.";
+          break;
+        case 'auth/network-request-failed':
+          errorMessage = "Network error. Please check your internet connection.";
+          break;
+        default:
+          errorMessage = error.message || "An unexpected error occurred. Please try again.";
       }
-    } catch (error) {
-      console.error("Error creating default users:", error);
     }
+    
+    setError(errorMessage);
   };
 
   const contextValue = {
@@ -256,9 +188,9 @@ export function AuthProvider({ children }) {
 
   return (
     <AuthContext.Provider value={contextValue}>
-      {children}
+      {!loading && children}
     </AuthContext.Provider>
   );
 }
 
-export default AuthContext; 
+export default AuthContext;

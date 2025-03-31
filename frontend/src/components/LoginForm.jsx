@@ -66,6 +66,47 @@ const LoginForm = ({ isOpen, onClose, onSwitchToSignup }) => {
     return errors;
   };
 
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    const errors = validate();
+    setAuthError('');
+    
+    if (Object.keys(errors).length === 0) {
+      setIsSubmitting(true);
+      setFormErrors({});
+      
+      try {
+        console.log('Submitting login form with email:', formData.email);
+        const user = await login(formData.email, formData.password);
+        
+        if (user) {
+          console.log('Login successful, closing modal');
+          // Clear form data
+          setFormData({
+            email: '',
+            password: ''
+          });
+          onClose();
+        } else {
+          throw new Error('Login failed - no user returned');
+        }
+      } catch (error) {
+        console.error('Login form error:', error);
+        setAuthError(error.message || 'An unexpected error occurred. Please try again.');
+      } finally {
+        setIsSubmitting(false);
+      }
+    } else {
+      setFormErrors(errors);
+    }
+  };
+
+  const handleOverlayClick = (e) => {
+    if (formRef.current && !formRef.current.contains(e.target)) {
+      onClose();
+    }
+  };
+
   // Function to get a user-friendly error message from Firebase error codes
   const getFirebaseErrorMessage = (errorCode) => {
     switch(errorCode) {
@@ -81,39 +122,12 @@ const LoginForm = ({ isOpen, onClose, onSwitchToSignup }) => {
         return 'Too many failed login attempts. Please try again later or reset your password.';
       case 'auth/user-disabled':
         return 'This account has been disabled. Please contact support.';
+      case 'auth/operation-not-allowed':
+        return 'Email/password accounts are not enabled. Please contact support.';
+      case 'auth/network-request-failed':
+        return 'Network error. Please check your internet connection.';
       default:
         return 'An error occurred during login. Please try again later.';
-    }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    const errors = validate();
-    setAuthError('');
-    
-    if (Object.keys(errors).length === 0) {
-      setIsSubmitting(true);
-      setFormErrors({});
-      
-      try {
-        console.log('Submitting login form with email:', formData.email);
-        await login(formData.email, formData.password);
-        console.log('Login successful, closing modal');
-        onClose();
-      } catch (error) {
-        console.error('Login form error:', error.code, error.message);
-        setAuthError(getFirebaseErrorMessage(error.code || 'auth/unknown'));
-      } finally {
-        setIsSubmitting(false);
-      }
-    } else {
-      setFormErrors(errors);
-    }
-  };
-
-  const handleOverlayClick = (e) => {
-    if (formRef.current && !formRef.current.contains(e.target)) {
-      onClose();
     }
   };
 

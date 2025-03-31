@@ -6,9 +6,12 @@ export default defineConfig({
   plugins: [react()],
   server: {
     port: 5173,
-    strictPort: true,
+    strictPort: false,
     host: true,
-    open: true
+    open: true,
+    hmr: {
+      overlay: true
+    }
   },
   // Ensure proper paths for deployment
   base: '/',
@@ -31,7 +34,7 @@ export default defineConfig({
     }
   },
   preview: {
-    port: 3000,
-    strictPort: true
+    port: 5173,
+    strictPort: false
   }
 })

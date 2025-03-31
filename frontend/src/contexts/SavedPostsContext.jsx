@@ -116,7 +116,7 @@ export function SavedPostsProvider({ children }) {
 
   // Add a new post to the list
   const addNewPost = (post) => {
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
       try {
         // Log the post being created
         console.log("Creating new post:", post);
@@ -129,7 +129,7 @@ export function SavedPostsProvider({ children }) {
           createdAt: new Date().toISOString()
         };
         
-        // Get current posts from localStorage
+        // Get current posts from localStorage for duplicate checking
         const storedPosts = localStorage.getItem('posts');
         const currentPosts = storedPosts ? JSON.parse(storedPosts) : [];
         
@@ -149,7 +149,33 @@ export function SavedPostsProvider({ children }) {
           throw new Error("Duplicate post");
         }
         
-        // Add new post at the beginning of the array
+        try {
+          // Try to save to Firebase first
+          if (currentUser) {
+            // Import Firebase modules if not already imported at the top
+            const { getFirestore, collection, addDoc } = await import('firebase/firestore');
+            const { getApp } = await import('firebase/app');
+            
+            const app = getApp();
+            const db = getFirestore(app);
+            
+            // Add post to Firestore 'posts' collection
+            const postRef = await addDoc(collection(db, "posts"), {
+              ...newPost,
+              authorId: currentUser.uid,
+              authorEmail: currentUser.email
+            });
+            
+            console.log("Post saved to Firebase with ID:", postRef.id);
+            
+            // Update the ID with Firebase ID
+            newPost.id = postRef.id;
+          }
+        } catch (firebaseError) {
+          console.error("Error saving to Firebase, falling back to localStorage:", firebaseError);
+        }
+        
+        // Add new post at the beginning of the array (local storage as backup)
         const updatedPosts = [newPost, ...currentPosts];
         
         // Save back to localStorage

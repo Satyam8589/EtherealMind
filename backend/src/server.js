@@ -12,38 +12,68 @@ const fs = require('fs');
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-// Middleware
-app.use(cors({
-  origin: '*',
+// CORS configuration
+const corsOptions = {
+  origin: ['http://localhost:5173', 'http://localhost:5174', 'http://localhost:3000', 'http://localhost:8080'],
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
-}));
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true,
+  maxAge: 86400 // 24 hours
+};
+
+// Middleware
+app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Error:', err);
+  res.status(500).json({
+    status: 'error',
+    message: 'Internal server error',
+    error: process.env.NODE_ENV === 'development' ? err.message : undefined,
+    timestamp: new Date().toISOString()
+  });
+});
 
 // Serve static files from the public directory
 app.use(express.static(path.join(__dirname, '../public')));
 
-// Health check endpoint
+// Health check endpoint with detailed status
 app.get('/health', (req, res) => {
-  res.status(200).json({
+  const healthData = {
     status: 'success',
     message: 'Server is healthy',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
-    origin: req.headers['host'] || 'unknown'
-  });
+    origin: req.headers['host'] || 'unknown',
+    cors: {
+      origin: req.headers.origin || 'unknown',
+      allowed: corsOptions.origin.includes(req.headers.origin || '')
+    }
+  };
+  
+  console.log('Health check requested:', healthData);
+  res.status(200).json(healthData);
 });
 
-// API health check
+// API health check with more details
 app.get('/api/health', (req, res) => {
-  res.status(200).json({
+  const healthData = {
     status: 'success',
     message: 'API is healthy',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
-    origin: req.headers['host'] || 'unknown'
-  });
+    origin: req.headers['host'] || 'unknown',
+    cors: {
+      origin: req.headers.origin || 'unknown',
+      allowed: corsOptions.origin.includes(req.headers.origin || '')
+    }
+  };
+  
+  console.log('API health check requested:', healthData);
+  res.status(200).json(healthData);
 });
 
 // Posts endpoint - use the database module
@@ -199,6 +229,7 @@ if (require.main === module) {
     console.log(`Server running on http://localhost:${PORT}`);
     console.log(`Health check: http://localhost:${PORT}/health`);
     console.log(`API health check: http://localhost:${PORT}/api/health`);
+    console.log('CORS enabled for:', corsOptions.origin);
   });
 }
 

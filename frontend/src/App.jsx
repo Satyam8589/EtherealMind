@@ -12,6 +12,11 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { SavedPostsProvider } from './contexts/SavedPostsContext';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 
+// Define baseUrl for API calls
+const baseUrl = window.location.hostname === 'localhost' 
+  ? 'http://localhost:8080' 
+  : 'https://etherealmind-backend.vercel.app';
+
 // Simple loading component
 const LoadingIndicator = () => (
   <div style={{ 
@@ -164,14 +169,16 @@ function App() {
   useEffect(() => {
     const testBackendConnection = async () => {
       setApiStatus('checking');
-      // List of health endpoints to try
+      // List of health endpoints to try - updated based on the backend screenshot
       const healthEndpoints = [
+        `${baseUrl}/health`,
+        `${baseUrl}/api/health`,
         `${baseUrl}/api/standalone-health`,
         `${baseUrl}/api/saved-posts`,
-        `https://ethereal-mind-mvqz-ght2e64uv.vercel.app/api/standalone-health`,
-        `https://ethereal-mind-mvqz-ght2e64uv.vercel.app/api/saved-posts`,
-        `${baseUrl}/api/health`,
-        `${baseUrl}/health`,
+        // Try without trailing slashes
+        `${baseUrl.replace(/\/$/, '')}/health`,
+        `${baseUrl.replace(/\/$/, '')}/api/health`,
+        // Try the Vercel deployment
         `https://ethereal-mind-mvqz-ght2e64uv.vercel.app/health`,
         `https://ethereal-mind-mvqz-ght2e64uv.vercel.app/api/health`
       ];
