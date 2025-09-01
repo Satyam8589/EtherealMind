@@ -1,4 +1,4 @@
-# EtherealMind - Social Platform for Mindfulness
+# EtherealMind - Social Platform for Mindfulness and thought finds
 
 EtherealMind is a learning platform where users can explore, save, and interact with educational content across various fields.
 
